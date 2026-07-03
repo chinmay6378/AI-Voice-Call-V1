@@ -1,0 +1,32 @@
+services:
+  # ── Backend: FastAPI + LiveKit agent (via start.sh) ───────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      AUTO_START_AGENT: "false"   # start.sh starts the agent; don't double-spawn
+      DATABASE_URL: "sqlite+aiosqlite:////app/data/calls.db"
+    volumes:
+      - calls_data:/app/data      # persistent SQLite database
+    restart: unless-stopped
+    # Not exposed externally — Nginx proxies to it
+
+  # ── Frontend: React SPA + Nginx reverse proxy ─────────────────────────────
+  frontend:
+    build:
+      context: ./callflow-ui-main
+      dockerfile: Dockerfile
+      args:
+        # *** CHANGE THIS to your Contabo VPS public IP ***
+        VITE_API_BASE_URL: "http://85.239.242.78"
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  calls_data:
