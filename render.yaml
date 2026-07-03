@@ -4,7 +4,6 @@ services:
     name: ai-voice-call-backend
     runtime: docker
     rootDir: backend
-    dockerfilePath: ./Dockerfile
     plan: starter          # Starter ($7/mo) required for persistent disk
     healthCheckPath: /health
     disk:
