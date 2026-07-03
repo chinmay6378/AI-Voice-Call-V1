@@ -324,5 +324,7 @@ if __name__ == "__main__":
             ws_url=_s.livekit_url,
             api_key=_s.livekit_api_key,
             api_secret=_s.livekit_api_secret,
+            num_idle_processes=1,   # default 5 is too heavy for a single container
+            load_threshold=0.95,    # raise from 0.7 so startup load doesn't mark FULL
         )
     )

@@ -21,7 +21,6 @@ livekit-agents>=0.11.0           # LiveKit Agents framework (VoicePipelineAgent)
 livekit-plugins-deepgram>=0.7.0  # Deepgram STT plugin
 livekit-plugins-elevenlabs>=0.7.0 # ElevenLabs TTS plugin
 livekit-plugins-openai>=0.7.0    # OpenAI-compatible LLM plugin (used for Groq)
-livekit-plugins-silero>=0.7.0    # Silero VAD plugin
 
 # ── Deepgram (standalone) ─────────────────────────────────────────────────────
 deepgram-sdk>=3.5.0
