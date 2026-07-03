@@ -17,13 +17,13 @@ services:
       - key: APP_PORT
         value: "8000"
       - key: APP_BASE_URL
-        sync: false        # Fill in: https://ai-voice-call-backend.onrender.com
+        value: https://ai-voice-call-v1.onrender.com
       - key: DEBUG
         value: "false"
       - key: LOG_LEVEL
         value: INFO
       - key: AUTO_START_AGENT
-        value: "true"
+        value: "false"
       # ── Database (absolute path so it lands on the persistent disk) ──
       - key: DATABASE_URL
         value: sqlite+aiosqlite:////app/data/calls.db

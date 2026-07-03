@@ -28,6 +28,9 @@ COPY . .
 # Create data directory for SQLite (also used as Render persistent-disk mount point)
 RUN mkdir -p /app/data
 
+# Make startup script executable
+RUN chmod +x /app/start.sh
+
 # Expose FastAPI port
 EXPOSE 8000
 
@@ -35,5 +38,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Default: run both FastAPI + agent worker (AUTO_START_AGENT=true)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Start both the agent worker (background) and FastAPI server (foreground)
+CMD ["/bin/bash", "/app/start.sh"]
