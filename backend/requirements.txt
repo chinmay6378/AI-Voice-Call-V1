@@ -1,0 +1,46 @@
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9          # form body parsing for SignalWire webhooks
+
+# ── Settings & validation ─────────────────────────────────────────────────────
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-dotenv>=1.0.1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.30
+aiosqlite>=0.20.0                # async SQLite driver
+
+# ── SignalWire ────────────────────────────────────────────────────────────────
+signalwire>=2.0.0                # Twilio-compatible REST client
+
+# ── LiveKit ───────────────────────────────────────────────────────────────────
+livekit>=0.17.0                  # LiveKit server SDK (room, SIP, agent APIs)
+livekit-agents>=0.11.0           # LiveKit Agents framework (VoicePipelineAgent)
+livekit-plugins-deepgram>=0.7.0  # Deepgram STT plugin
+livekit-plugins-elevenlabs>=0.7.0 # ElevenLabs TTS plugin
+livekit-plugins-openai>=0.7.0    # OpenAI-compatible LLM plugin (used for Groq)
+livekit-plugins-silero>=0.7.0    # Silero VAD plugin
+
+# ── Deepgram (standalone) ─────────────────────────────────────────────────────
+deepgram-sdk>=3.5.0
+
+# ── LLM — Groq via OpenAI client ─────────────────────────────────────────────
+openai>=1.40.0
+
+# ── ElevenLabs (standalone) ──────────────────────────────────────────────────
+elevenlabs>=1.9.0
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+structlog>=24.1.0
+
+# ── HTTP ─────────────────────────────────────────────────────────────────────
+httpx>=0.27.0                    # async HTTP (used in tests + health checks)
+openpyxl>=3.1.0                  # Excel (.xlsx) parsing for bulk campaigns
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.2.0
+pytest-anyio>=0.0.0
+anyio[trio]>=4.4.0
+pytest-asyncio>=0.23.0

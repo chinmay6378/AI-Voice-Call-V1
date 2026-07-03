@@ -1,0 +1,37 @@
+# Secrets — never bake into the image
+.env
+*.pem
+*.key
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Database — runtime data, not part of image
+data/
+
+# Tests
+tests/
+
+# Docs
+docs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
