@@ -72,6 +72,14 @@ RULES:
 
 # ── Agent class ───────────────────────────────────────────────────────────────
 
+_GOODBYE_PHRASES = [
+    "goodbye", "good bye", "have a great day", "have a good day",
+    "take care", "bye", "i'll remove you", "remove you right away",
+    "thank you for your time", "thanks for your time",
+    "i will let you go", "i'll let you go",
+    "have a wonderful", "have a nice", "no longer contact",
+]
+
 class VoiceCallAgent(Agent):
     """
     Conversational agent for outbound calls.
@@ -87,6 +95,7 @@ class VoiceCallAgent(Agent):
         customer_name: str,
         phone_number: str,
         settings: Any,
+        disconnect_event: asyncio.Event,
     ) -> None:
         instructions = (
             f"ENGLISH ONLY — every reply must be in English, no exceptions, regardless of what language the customer uses.\n\n"
@@ -97,6 +106,8 @@ class VoiceCallAgent(Agent):
         self.customer_name = customer_name
         self._settings = settings
         self._session: AgentSession | None = None
+        self._disconnect_event = disconnect_event
+        self._hangup_scheduled = False
 
     async def on_enter(self) -> None:
         logger.info("agent.on_enter", call_id=self.call_id)
@@ -146,6 +157,19 @@ class VoiceCallAgent(Agent):
             text = _extract_text(msg.content)
             logger.info("transcript.agent", call_id=self.call_id, text=text)
             asyncio.ensure_future(_save_transcript(self.call_id, "agent", text))
+
+            # Auto-hangup when agent says a goodbye phrase
+            lower = text.lower()
+            if not self._hangup_scheduled and any(p in lower for p in _GOODBYE_PHRASES):
+                logger.info("agent.goodbye_detected", call_id=self.call_id, text=text[:80])
+                self._hangup_scheduled = True
+                asyncio.ensure_future(self._schedule_hangup(3.5))
+
+    async def _schedule_hangup(self, delay: float) -> None:
+        """Wait for TTS to finish the goodbye, then trigger disconnect."""
+        await asyncio.sleep(delay)
+        logger.info("agent.auto_hangup", call_id=self.call_id)
+        self._disconnect_event.set()
 
 
 # ── Job entrypoint ────────────────────────────────────────────────────────────
@@ -198,13 +222,11 @@ async def entrypoint(ctx: JobContext) -> None:
     # Update DB: call is now in progress
     await _mark_in_progress(call_id)
 
-    # Fires when the customer hangs up or the room closes
+    # Fires when the customer hangs up, room closes, or agent says goodbye
     disconnect_event = asyncio.Event()
     ctx.room.on("disconnected", lambda *_: disconnect_event.set())
-    ctx.room.on(
-        "participant_disconnected",
-        lambda p: disconnect_event.set() if p.identity == "customer" else None,
-    )
+    # Fire on ANY remote participant leaving (customer SIP, etc.)
+    ctx.room.on("participant_disconnected", lambda p: disconnect_event.set())
 
     try:
         session = AgentSession(
@@ -237,6 +259,7 @@ async def entrypoint(ctx: JobContext) -> None:
             customer_name=customer_name,
             phone_number=phone_number,
             settings=settings,
+            disconnect_event=disconnect_event,
         )
         agent._session = session
 
