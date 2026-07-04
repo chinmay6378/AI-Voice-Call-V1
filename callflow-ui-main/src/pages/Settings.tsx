@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Copy, Check, Zap, Save, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Copy, Check, Zap, Save, AlertCircle, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getHealth } from "@/lib/api";
+import { ELEVENLABS_VOICES } from "@/pages/CreateCampaign";
 
 // ── API key field ─────────────────────────────────────────────────────────────
 function ApiKeyRow({
@@ -71,6 +72,74 @@ function ApiKeyRow({
         </Button>
       </div>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ── ElevenLabs voice picker ───────────────────────────────────────────────────
+function ElevenLabsVoicePicker() {
+  const STORAGE_KEY = "cfg_elevenlabs_voice";
+  const saved = localStorage.getItem(STORAGE_KEY) ?? "21m00Tcm4TlvDq8ikWAM";
+  const [voiceId, setVoiceId] = useState(saved);
+  const [customId, setCustomId] = useState(saved.startsWith("__") ? "" : "");
+
+  const isCustom = voiceId === "__custom__";
+  const selected = ELEVENLABS_VOICES.find((v) => v.id === voiceId);
+
+  const save = (id: string) => {
+    const effectiveId = id === "__custom__" ? customId : id;
+    localStorage.setItem(STORAGE_KEY, effectiveId);
+    toast.success("Voice saved");
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs font-medium flex items-center gap-1.5">
+          <Volume2 className="h-3.5 w-3.5" />ElevenLabs Voice
+        </Label>
+        {selected && (
+          <span className="text-[10px] font-mono text-muted-foreground">{selected.id}</span>
+        )}
+      </div>
+      <Select
+        value={voiceId}
+        onValueChange={(v) => { setVoiceId(v); if (v !== "__custom__") save(v); }}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select a voice…">
+            {selected
+              ? `${selected.name} — ${selected.style} · ${selected.accent} ${selected.gender === "F" ? "Female" : "Male"}`
+              : isCustom ? "Custom Voice ID" : "Select a voice…"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {ELEVENLABS_VOICES.map((v) => (
+            <SelectItem key={v.id} value={v.id}>
+              <div className="flex items-center gap-2">
+                <span className="font-medium w-20">{v.name}</span>
+                <span className="text-xs text-muted-foreground">{v.style} · {v.accent} {v.gender === "F" ? "Female" : "Male"}</span>
+              </div>
+            </SelectItem>
+          ))}
+          <SelectItem value="__custom__">
+            <span className="text-muted-foreground italic">Custom Voice ID…</span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      {isCustom && (
+        <div className="flex gap-1.5">
+          <Input
+            value={customId}
+            onChange={(e) => setCustomId(e.target.value)}
+            placeholder="Paste ElevenLabs voice ID"
+            className="font-mono text-xs"
+          />
+          <Button size="sm" onClick={() => save("__custom__")} className="shrink-0 text-xs">
+            <Save className="mr-1 h-3 w-3" />Save
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -170,10 +239,14 @@ export default function Settings() {
         <TabsContent value="voice" className="space-y-4">
           <SettingsSection title="Voice (TTS) Providers" description="Text-to-speech API credentials">
             <div className="space-y-4">
-              <ApiKeyRow label="ElevenLabs API Key"   storageKey="elevenlabs_key"   placeholder="••••••••••••" />
-              <ApiKeyRow label="ElevenLabs Voice ID"  storageKey="elevenlabs_voice" placeholder="21m00Tcm4TlvDq8ikWAM" hint="Voice ID from your ElevenLabs library" />
-              <ApiKeyRow label="Azure Speech Key"     storageKey="azure_speech_key" placeholder="••••••••••••" />
-              <ApiKeyRow label="Google Cloud Key"     storageKey="google_tts_key"   placeholder="••••••••••••" />
+              <ApiKeyRow label="ElevenLabs API Key" storageKey="elevenlabs_key" placeholder="••••••••••••" />
+              <div className="border-t border-border pt-4">
+                <ElevenLabsVoicePicker />
+              </div>
+              <div className="border-t border-border pt-4 space-y-4">
+                <ApiKeyRow label="Azure Speech Key"  storageKey="azure_speech_key" placeholder="••••••••••••" />
+                <ApiKeyRow label="Google Cloud Key"  storageKey="google_tts_key"   placeholder="••••••••••••" />
+              </div>
             </div>
           </SettingsSection>
         </TabsContent>

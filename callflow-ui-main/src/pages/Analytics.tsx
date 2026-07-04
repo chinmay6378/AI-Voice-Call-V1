@@ -54,16 +54,15 @@ function groupByDay(calls: Call[], days = 7) {
   }));
 }
 
-function hourlyDistribution() {
-  const hours = [
-    { hour: "8am",  calls: 12 }, { hour: "9am",  calls: 34 },
-    { hour: "10am", calls: 58 }, { hour: "11am", calls: 71 },
-    { hour: "12pm", calls: 45 }, { hour: "1pm",  calls: 39 },
-    { hour: "2pm",  calls: 62 }, { hour: "3pm",  calls: 78 },
-    { hour: "4pm",  calls: 55 }, { hour: "5pm",  calls: 28 },
-    { hour: "6pm",  calls: 14 },
-  ];
-  return hours;
+function hourlyDistribution(calls: Call[]) {
+  const labels = ["8am","9am","10am","11am","12pm","1pm","2pm","3pm","4pm","5pm","6pm"];
+  const map: Record<number, number> = {};
+  for (let h = 8; h <= 18; h++) map[h] = 0;
+  calls.forEach((c) => {
+    const h = new Date(c.date).getHours();
+    if (h >= 8 && h <= 18) map[h]++;
+  });
+  return labels.map((hour, i) => ({ hour, calls: map[8 + i] }));
 }
 
 function funnelData(calls: Call[]) {
@@ -106,7 +105,7 @@ export default function Analytics() {
   const connectRate = total ? Math.round((completed / total) * 100) : 0;
 
   const daily   = groupByDay(calls, Number(range));
-  const hourly  = hourlyDistribution();
+  const hourly  = hourlyDistribution(calls);
   const funnel  = funnelData(calls);
   const campBar = campaigns.slice(0, 6).map((c) => ({
     name: c.name.length > 14 ? c.name.slice(0, 14) + "…" : c.name,

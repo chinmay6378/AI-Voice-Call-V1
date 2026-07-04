@@ -51,6 +51,8 @@ const DEFAULTS = {
   // Step 3
   voiceProvider: "elevenlabs",
   voiceModel: "eleven_turbo_v2_5",
+  voiceId: "21m00Tcm4TlvDq8ikWAM",
+  customVoiceId: "",
   speechSpeed: 1.0,
   stability: 0.5,
   responseDelay: 0.5,
@@ -70,6 +72,39 @@ const DEFAULTS = {
   callTimeout: 30,
   voicemailDetection: true,
 };
+
+// ── ElevenLabs voices ────────────────────────────────────────────────────────
+export const ELEVENLABS_VOICES = [
+  // Female
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel",    gender: "F", accent: "American",     style: "Calm" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi",      gender: "F", accent: "American",     style: "Strong" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",     gender: "F", accent: "American",     style: "Soft" },
+  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli",      gender: "F", accent: "American",     style: "Young" },
+  { id: "FGY2WhTYpPnrIDTdsKH5", name: "Laura",     gender: "F", accent: "American",     style: "Upbeat" },
+  { id: "jsCqWAovK2LkecY7zXl4", name: "Freya",     gender: "F", accent: "American",     style: "Positive" },
+  { id: "cgSgspJ2msm6clMCkdW9", name: "Jessica",   gender: "F", accent: "American",     style: "Expressive" },
+  { id: "XrExE9yKIg1WjnnlVkGX", name: "Matilda",   gender: "F", accent: "American",     style: "Warm" },
+  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy",   gender: "F", accent: "British",      style: "Warm" },
+  { id: "XB0fDUnXU5powFXDhCwa", name: "Charlotte", gender: "F", accent: "British",      style: "Confident" },
+  { id: "Xb7hH8MSUJpSbSDYk0k2", name: "Alice",     gender: "F", accent: "British",      style: "Professional" },
+  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily",      gender: "F", accent: "British",      style: "Warm" },
+  // Male
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",      gender: "M", accent: "American",     style: "Deep" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni",    gender: "M", accent: "American",     style: "Well-rounded" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",      gender: "M", accent: "American",     style: "Deep" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold",    gender: "M", accent: "American",     style: "Crisp" },
+  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam",       gender: "M", accent: "American",     style: "Raspy" },
+  { id: "bIHbv24MWmeRgasZH58o", name: "Will",      gender: "M", accent: "American",     style: "Friendly" },
+  { id: "cjVigY5qzO86Huf0OWal", name: "Eric",      gender: "M", accent: "American",     style: "Friendly" },
+  { id: "iP95p4xoKVk53GoZ742B", name: "Chris",     gender: "M", accent: "American",     style: "Casual" },
+  { id: "nPczCjzI2devNBz1zQrb", name: "Brian",     gender: "M", accent: "American",     style: "Deep" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel",    gender: "M", accent: "British",      style: "Deep" },
+  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George",    gender: "M", accent: "British",      style: "Warm" },
+  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry",     gender: "M", accent: "British",      style: "Smooth" },
+  { id: "N2lVS1w4EtoT3dr4eOWO", name: "Callum",    gender: "M", accent: "Transatlantic", style: "Intense" },
+  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie",   gender: "M", accent: "Australian",   style: "Natural" },
+  { id: "D38z5RcWu1voky8WS1ja", name: "Fin",       gender: "M", accent: "Irish",        style: "Calm" },
+] as const;
 
 const LLM_MODELS: Record<string, string[]> = {
   groq:       ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
@@ -364,13 +399,34 @@ function Step2({ form, set }: { form: typeof DEFAULTS; set: (k: keyof typeof DEF
 }
 
 // ── Step 3: Voice Configuration ───────────────────────────────────────────────
+const VOICE_MODELS: Record<string, string[]> = {
+  elevenlabs: ["eleven_turbo_v2_5", "eleven_multilingual_v2", "eleven_monolingual_v1"],
+  cartesia:   ["sonic-english", "sonic-multilingual"],
+  azure:      ["neural", "standard"],
+  google:     ["Wavenet", "Standard", "Neural2"],
+  deepgram:   ["aura-asteria-en", "aura-luna-en", "aura-stella-en", "aura-orion-en"],
+};
+
 function Step3({ form, set }: { form: typeof DEFAULTS; set: (k: keyof typeof DEFAULTS, v: unknown) => void }) {
+  const models = VOICE_MODELS[form.voiceProvider] ?? [];
+  const isElevenLabs = form.voiceProvider === "elevenlabs";
+  const isCustomVoice = form.voiceId === "__custom__";
+  const selectedVoice = ELEVENLABS_VOICES.find((v) => v.id === form.voiceId);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Voice Provider</Label>
-          <Select value={form.voiceProvider} onValueChange={(v) => set("voiceProvider", v)}>
+          <Select
+            value={form.voiceProvider}
+            onValueChange={(v) => {
+              set("voiceProvider", v);
+              set("voiceModel", VOICE_MODELS[v]?.[0] ?? "");
+              if (v !== "elevenlabs") set("voiceId", "");
+              else set("voiceId", "21m00Tcm4TlvDq8ikWAM");
+            }}
+          >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {["elevenlabs","cartesia","azure","google","deepgram"].map((p) => (
@@ -384,13 +440,61 @@ function Step3({ form, set }: { form: typeof DEFAULTS; set: (k: keyof typeof DEF
           <Select value={form.voiceModel} onValueChange={(v) => set("voiceModel", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="eleven_turbo_v2_5">eleven_turbo_v2_5</SelectItem>
-              <SelectItem value="eleven_multilingual_v2">eleven_multilingual_v2</SelectItem>
-              <SelectItem value="eleven_monolingual_v1">eleven_monolingual_v1</SelectItem>
+              {models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      {/* ── ElevenLabs voice selector ── */}
+      {isElevenLabs && (
+        <div className="space-y-2">
+          <Label>Voice Character</Label>
+          <Select
+            value={form.voiceId}
+            onValueChange={(v) => { set("voiceId", v); if (v !== "__custom__") set("customVoiceId", ""); }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a voice…">
+                {selectedVoice
+                  ? `${selectedVoice.name} — ${selectedVoice.style} · ${selectedVoice.accent} ${selectedVoice.gender === "F" ? "Female" : "Male"}`
+                  : isCustomVoice ? "Custom Voice ID" : "Select a voice…"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {ELEVENLABS_VOICES.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium w-20">{v.name}</span>
+                    <span className="text-xs text-muted-foreground">{v.style} · {v.accent} {v.gender === "F" ? "Female" : "Male"}</span>
+                  </div>
+                </SelectItem>
+              ))}
+              <SelectItem value="__custom__">
+                <span className="text-muted-foreground italic">Custom Voice ID…</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Show selected voice ID for reference */}
+          {selectedVoice && (
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Voice ID: {selectedVoice.id}
+            </p>
+          )}
+
+          {/* Custom voice ID input */}
+          {isCustomVoice && (
+            <Input
+              value={form.customVoiceId}
+              onChange={(e) => set("customVoiceId", e.target.value)}
+              placeholder="Paste your ElevenLabs voice ID here"
+              className="font-mono text-xs"
+            />
+          )}
+        </div>
+      )}
+
       <div className="grid gap-6 sm:grid-cols-3">
         <SliderField label="Speech Speed" value={form.speechSpeed} min={0.5} max={2} step={0.1} onChange={(v) => set("speechSpeed", v)} />
         <SliderField label="Stability" value={form.stability} min={0} max={1} step={0.1} onChange={(v) => set("stability", v)} />
