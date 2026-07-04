@@ -128,6 +128,7 @@ export default function Campaigns() {
               onStop={() => handleStop(c.id)}
               onView={() => navigate(`/results?campaign=${c.id}`)}
               onExport={() => { window.location.href = getCampaignExportUrl(c.id); toast.success("Downloading Excel…"); }}
+            />
           ))}
         </div>
       )}
