@@ -46,6 +46,7 @@ from database.repository import (
     update_call_status,
 )
 from database.models.call import CallStatus
+from services.llm.groq_client import GroqClient
 from utils.logger import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -307,7 +308,21 @@ async def _mark_in_progress(call_id: str) -> None:
 async def _end_call_db(call_id: str, status: CallStatus) -> None:
     try:
         async for session in get_session():
-            await finalize_call(session, call_id, status=status)
+            # Generate AI summary from transcript before finalising
+            summary: str | None = None
+            try:
+                call = await get_call(session, call_id)
+                transcript = call.get_transcript() if call else []
+                if transcript:
+                    groq = GroqClient(get_settings())
+                    summary = await groq.summarise_transcript(
+                        call.customer_name, transcript
+                    )
+                    logger.info("call.summary_generated", call_id=call_id, chars=len(summary))
+            except Exception as exc:
+                logger.error("call.summary_failed", call_id=call_id, error=str(exc))
+
+            await finalize_call(session, call_id, status=status, summary=summary)
             break
     except Exception as exc:
         logger.error("call.finalize_failed", call_id=call_id, error=str(exc))

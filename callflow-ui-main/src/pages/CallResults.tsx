@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/StatusBadge";
-import { listCalls } from "@/lib/api";
+import { listCalls, getCallsExportUrl } from "@/lib/api";
 import type { Call } from "@/lib/mock-data";
 import { formatDate, formatDuration } from "@/lib/mock-data";
 import { toast } from "sonner";
@@ -121,7 +121,9 @@ export default function CallResults() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={exportCsv}>Export CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info("Excel export coming soon")}>Export Excel</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { window.location.href = getCallsExportUrl(); toast.success("Downloading Excel…"); }}>
+                Export Excel (with summaries)
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

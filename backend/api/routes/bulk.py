@@ -14,12 +14,20 @@ import io
 import uuid
 from typing import Annotated
 
+import io
+
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings, get_settings
 from database.repository import (
     create_campaign,
+    get_call,
     get_campaign,
     get_campaign_contacts,
     get_session,
@@ -207,6 +215,104 @@ async def get_one(
         raise HTTPException(status_code=404, detail="Campaign not found")
     contacts = await get_campaign_contacts(session, campaign_id)
     return _to_response(campaign, contacts)
+
+
+@router.get("/campaigns/{campaign_id}/export")
+async def export_campaign_excel(
+    campaign_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Download campaign results as a formatted Excel file with call status and AI summaries."""
+    campaign = await get_campaign(session, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    contacts = await get_campaign_contacts(session, campaign_id)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Campaign Results"
+
+    # ── Header row ────────────────────────────────────────────────────────────
+    headers = ["#", "Name", "Phone Number", "Call Status", "Duration", "Called At", "AI Summary"]
+    ws.append(headers)
+    hdr_font = Font(bold=True, color="FFFFFF", size=11)
+    hdr_fill = PatternFill("solid", fgColor="1E3A8A")
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = hdr_font
+        cell.fill = hdr_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[1].height = 24
+
+    # ── Status colours ────────────────────────────────────────────────────────
+    STATUS_FILL = {
+        "completed":   "D1FAE5",
+        "in_progress": "DBEAFE",
+        "voicemail":   "FEF3C7",
+        "failed":      "FEE2E2",
+        "no_answer":   "F3F4F6",
+        "busy":        "FEE2E2",
+        "cancelled":   "F3F4F6",
+        "calling":     "EDE9FE",
+        "pending":     "F9FAFB",
+    }
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
+    for i, contact in enumerate(contacts, 1):
+        call = await get_call(session, contact.call_id) if contact.call_id else None
+
+        raw_status = str(call.status if call else contact.status)
+        # Human-friendly label
+        label_map = {
+            "completed": "Connected",
+            "in_progress": "In Progress",
+            "voicemail": "Voicemail",
+            "failed": "Not Answered",
+            "no_answer": "No Answer",
+            "busy": "Busy",
+            "cancelled": "Cancelled",
+            "calling": "Calling",
+            "pending": "Pending",
+        }
+        status_label = label_map.get(raw_status, raw_status.replace("_", " ").title())
+
+        if call and call.duration_seconds:
+            mins, secs = divmod(call.duration_seconds, 60)
+            duration_str = f"{mins}:{secs:02d}"
+        else:
+            duration_str = "—"
+
+        called_at = (
+            call.created_at.strftime("%Y-%m-%d %H:%M") if call and call.created_at else "—"
+        )
+        summary = (call.summary or "") if call else ""
+
+        ws.append([i, contact.name, contact.phone_number, status_label, duration_str, called_at, summary])
+
+        row_num = i + 1
+        color = STATUS_FILL.get(raw_status, "FFFFFF")
+        ws.cell(row=row_num, column=4).fill = PatternFill("solid", fgColor=color)
+        ws.cell(row=row_num, column=7).alignment = Alignment(wrap_text=True)
+
+    # ── Column widths ─────────────────────────────────────────────────────────
+    for col, width in zip(range(1, 8), [5, 25, 18, 16, 10, 20, 70]):
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    safe_name = campaign.name.replace(" ", "_").replace("/", "_")[:40]
+    filename = f"{safe_name}_results.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _to_response(campaign, contacts) -> CampaignResponse:

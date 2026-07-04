@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Megaphone, Plus, Play, Pause, Trash2, BarChart2,
-  Copy, MoreHorizontal, Search, RefreshCw, Users, CheckCircle2,
+  Copy, MoreHorizontal, Search, RefreshCw, Users, CheckCircle2, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { listCampaigns, startCampaign, stopCampaign } from "@/lib/api";
+import { listCampaigns, startCampaign, stopCampaign, getCampaignExportUrl } from "@/lib/api";
 import type { Campaign } from "@/lib/api";
 import { formatDate } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -127,7 +127,7 @@ export default function Campaigns() {
               onStart={() => handleStart(c.id)}
               onStop={() => handleStop(c.id)}
               onView={() => navigate(`/results?campaign=${c.id}`)}
-            />
+              onExport={() => { window.location.href = getCampaignExportUrl(c.id); toast.success("Downloading Excel…"); }}
           ))}
         </div>
       )}
@@ -141,11 +141,13 @@ function CampaignCard({
   onStart,
   onStop,
   onView,
+  onExport,
 }: {
   campaign: Campaign;
   onStart: () => void;
   onStop: () => void;
   onView: () => void;
+  onExport: () => void;
 }) {
   const pct = c.total_contacts
     ? Math.round((c.done_contacts / c.total_contacts) * 100)
@@ -179,6 +181,7 @@ function CampaignCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem onClick={onView}><BarChart2 className="mr-2 h-3.5 w-3.5" />View Results</DropdownMenuItem>
+                <DropdownMenuItem onClick={onExport}><Download className="mr-2 h-3.5 w-3.5" />Export Excel</DropdownMenuItem>
                 <DropdownMenuItem><Copy className="mr-2 h-3.5 w-3.5" />Duplicate</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive">

@@ -11,10 +11,16 @@ GET   /health                 — Health check
 """
 from __future__ import annotations
 
+import io
 import uuid
 from typing import Annotated
 
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status  # noqa: F401
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings, get_settings
@@ -238,3 +244,78 @@ async def get_active(session: AsyncSession = Depends(get_session)) -> CallStatus
     if not call:
         return None
     return CallStatusResponse.model_validate(call)
+
+
+@_active_router.get("/export")
+async def export_all_calls_excel(session: AsyncSession = Depends(get_session)) -> StreamingResponse:
+    """Download all call records as a formatted Excel file with AI summaries."""
+    calls = await get_all_calls(session, limit=5000)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Call Results"
+
+    headers = ["#", "Name", "Phone Number", "Call Status", "Duration", "Date & Time", "AI Summary"]
+    ws.append(headers)
+    hdr_font = Font(bold=True, color="FFFFFF", size=11)
+    hdr_fill = PatternFill("solid", fgColor="1E3A8A")
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = hdr_font
+        cell.fill = hdr_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+
+    STATUS_FILL = {
+        "completed":   "D1FAE5",
+        "in_progress": "DBEAFE",
+        "voicemail":   "FEF3C7",
+        "failed":      "FEE2E2",
+        "no_answer":   "F3F4F6",
+        "busy":        "FEE2E2",
+        "cancelled":   "F3F4F6",
+        "dialing":     "EDE9FE",
+        "ringing":     "EDE9FE",
+        "pending":     "F9FAFB",
+    }
+    label_map = {
+        "completed": "Connected", "in_progress": "In Progress",
+        "voicemail": "Voicemail", "failed": "Not Answered",
+        "no_answer": "No Answer", "busy": "Busy",
+        "cancelled": "Cancelled", "dialing": "Dialing",
+        "ringing": "Ringing", "pending": "Pending",
+    }
+
+    for i, call in enumerate(calls, 1):
+        raw_status = str(call.status)
+        status_label = label_map.get(raw_status, raw_status.replace("_", " ").title())
+
+        if call.duration_seconds:
+            mins, secs = divmod(call.duration_seconds, 60)
+            duration_str = f"{mins}:{secs:02d}"
+        else:
+            duration_str = "—"
+
+        date_str = call.created_at.strftime("%Y-%m-%d %H:%M") if call.created_at else "—"
+        summary = call.summary or ""
+
+        ws.append([i, call.customer_name, call.phone_number, status_label, duration_str, date_str, summary])
+
+        row_num = i + 1
+        color = STATUS_FILL.get(raw_status, "FFFFFF")
+        ws.cell(row=row_num, column=4).fill = PatternFill("solid", fgColor=color)
+        ws.cell(row=row_num, column=7).alignment = Alignment(wrap_text=True)
+
+    for col, width in zip(range(1, 8), [5, 25, 18, 16, 10, 20, 70]):
+        ws.column_dimensions[get_column_letter(col)].width = width
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="call_results.xlsx"'},
+    )

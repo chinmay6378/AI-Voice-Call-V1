@@ -248,6 +248,14 @@ export async function listCampaigns(): Promise<Campaign[]> {
   return res.json();
 }
 
+export function getCallsExportUrl(): string {
+  return `${API_BASE}/calls/export`;
+}
+
+export function getCampaignExportUrl(campaignId: string): string {
+  return `${API_BASE}/bulk/campaigns/${campaignId}/export`;
+}
+
 export async function getHealth() {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) throw new Error("Health check failed");
