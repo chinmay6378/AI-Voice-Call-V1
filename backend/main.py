@@ -31,9 +31,10 @@ from fastapi.responses import JSONResponse
 
 from api.routes.bulk import router as bulk_router
 from api.routes.calls import router as call_router, _active_router as active_router
+from api.routes.settings_routes import router as settings_router
 from api.routes.webhooks import router as webhook_router
-from config.settings import get_settings
-from database.repository import close_db, init_db
+from config.settings import apply_db_overrides, get_settings
+from database.repository import close_db, get_all_db_settings, get_session, init_db
 from services.campaign_runner import resume_running_campaigns
 from database.schemas.call import HealthResponse, ServiceStatus
 from utils.logger import configure_logging, get_logger
@@ -56,6 +57,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialise database
     await init_db(settings.database_url)
 
+    # Apply any API keys / config previously saved through the Settings UI.
+    # Must run before starting the agent so the subprocess inherits the env vars.
+    try:
+        async for db in get_session():
+            db_overrides = await get_all_db_settings(db)
+            if db_overrides:
+                apply_db_overrides(db_overrides)
+                logger.info("settings.db_overrides_applied", count=len(db_overrides))
+            break
+    except Exception as exc:
+        logger.warning("settings.db_overrides_failed", error=str(exc))
+
     # Optionally auto-start the agent worker as a sibling process.
     # Set AUTO_START_AGENT=false to manage the worker yourself.
     if os.getenv("AUTO_START_AGENT", "true").lower() == "true":
@@ -72,7 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         else:
             logger.warning("agent_worker.not_found", path=agent_module)
 
-    resume_running_campaigns(settings)
+    resume_running_campaigns(get_settings())
     logger.info("app.ready", host=settings.app_host, port=settings.app_port)
     yield
 
@@ -117,6 +130,7 @@ app.include_router(call_router)
 app.include_router(active_router)
 app.include_router(webhook_router)
 app.include_router(bulk_router)
+app.include_router(settings_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])

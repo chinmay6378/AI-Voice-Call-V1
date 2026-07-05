@@ -96,3 +96,17 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+def invalidate_settings_cache() -> None:
+    get_settings.cache_clear()
+
+
+def apply_db_overrides(overrides: dict[str, str]) -> None:
+    """Write non-empty DB settings into os.environ, then clear the lru_cache
+    so the next get_settings() call picks them up."""
+    import os
+    for key, value in overrides.items():
+        if value:
+            os.environ[key.upper()] = value
+    get_settings.cache_clear()

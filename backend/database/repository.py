@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import (
 
 from database.models.call import Base, Call, CallStatus
 from database.models.campaign import Campaign, CampaignContact, CampaignStatus, ContactStatus
+from database.models.app_setting import AppSetting
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -346,4 +347,22 @@ async def reset_stuck_contacts(session: AsyncSession, campaign_id: str) -> None:
     for contact in result.scalars().all():
         contact.status = ContactStatus.PENDING
     await session.commit()
-    return call
+
+
+# ── App settings (DB-persisted key-value store) ───────────────────────────────
+
+async def get_all_db_settings(session: AsyncSession) -> dict[str, str]:
+    """Return all persisted settings as {key: value}."""
+    result = await session.execute(select(AppSetting))
+    return {row.key: row.value for row in result.scalars().all()}
+
+
+async def set_db_setting(session: AsyncSession, key: str, value: str) -> None:
+    """Upsert a single setting."""
+    existing = await session.get(AppSetting, key)
+    if existing:
+        existing.value = value
+        existing.updated_at = datetime.utcnow()
+    else:
+        session.add(AppSetting(key=key, value=value, updated_at=datetime.utcnow()))
+    await session.commit()

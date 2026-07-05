@@ -262,3 +262,23 @@ export async function getHealth() {
   const data = await res.json();
   return (data.services ?? []) as { name: string; description: string; status: string; latency: string }[];
 }
+
+// ── Settings persistence ──────────────────────────────────────────────────────
+
+export async function getConfiguredKeys(): Promise<Record<string, string>> {
+  const res = await fetch(`${API_BASE}/settings/keys`);
+  if (!res.ok) return {};
+  return res.json();
+}
+
+export async function saveConfigKey(key: string, value: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/settings/keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, value }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? "Failed to save setting");
+  }
+}

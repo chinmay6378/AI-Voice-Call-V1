@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye, EyeOff, Copy, Check, Zap, Save, AlertCircle, Volume2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff, Copy, Check, Zap, Save, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,22 +9,41 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getHealth } from "@/lib/api";
+import { getConfiguredKeys, getHealth, saveConfigKey } from "@/lib/api";
 import { ELEVENLABS_VOICES } from "@/pages/CreateCampaign";
 
 // ── API key field ─────────────────────────────────────────────────────────────
 function ApiKeyRow({
-  label, storageKey, placeholder, hint,
+  label, storageKey, placeholder, hint, backendKey, serverValue,
 }: {
   label: string; storageKey: string; placeholder?: string; hint?: string;
+  backendKey?: string; serverValue?: string;
 }) {
   const [value, setValue]   = useState(localStorage.getItem(`cfg_${storageKey}`) ?? "");
   const [show, setShow]     = useState(false);
   const [status, setStatus] = useState<"idle" | "ok" | "err">("idle");
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  // Sync from server once the parent loads keys
+  useEffect(() => {
+    if (serverValue !== undefined && serverValue !== "") {
+      setValue(serverValue);
+      localStorage.setItem(`cfg_${storageKey}`, serverValue);
+    }
+  }, [serverValue, storageKey]);
+
+  const save = async () => {
     localStorage.setItem(`cfg_${storageKey}`, value);
-    toast.success(`${label} saved`);
+    if (!backendKey) { toast.success(`${label} saved`); return; }
+    setSaving(true);
+    try {
+      await saveConfigKey(backendKey, value);
+      toast.success(`${label} saved to server`);
+    } catch {
+      toast.warning(`${label} saved locally (server unreachable)`);
+    } finally {
+      setSaving(false);
+    }
   };
   const copy = () => { navigator.clipboard.writeText(value); toast.success("Copied"); };
   const test = async () => {
@@ -67,8 +86,8 @@ function ApiKeyRow({
         <Button variant="outline" size="sm" onClick={test} className="shrink-0 text-xs">
           <Zap className="mr-1 h-3 w-3" />Test
         </Button>
-        <Button size="sm" onClick={save} className="shrink-0 text-xs">
-          <Save className="mr-1 h-3 w-3" />Save
+        <Button size="sm" onClick={save} disabled={saving} className="shrink-0 text-xs">
+          <Save className="mr-1 h-3 w-3" />{saving ? "Saving…" : "Save"}
         </Button>
       </div>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -77,19 +96,32 @@ function ApiKeyRow({
 }
 
 // ── ElevenLabs voice picker ───────────────────────────────────────────────────
-function ElevenLabsVoicePicker() {
+function ElevenLabsVoicePicker({ serverValue }: { serverValue?: string }) {
   const STORAGE_KEY = "cfg_elevenlabs_voice";
   const saved = localStorage.getItem(STORAGE_KEY) ?? "21m00Tcm4TlvDq8ikWAM";
   const [voiceId, setVoiceId] = useState(saved);
-  const [customId, setCustomId] = useState(saved.startsWith("__") ? "" : "");
+  const [customId, setCustomId] = useState("");
+
+  // Sync from server once keys load
+  useEffect(() => {
+    if (serverValue && serverValue !== "") {
+      setVoiceId(serverValue);
+      localStorage.setItem(STORAGE_KEY, serverValue);
+    }
+  }, [serverValue]);
 
   const isCustom = voiceId === "__custom__";
   const selected = ELEVENLABS_VOICES.find((v) => v.id === voiceId);
 
-  const save = (id: string) => {
+  const save = async (id: string) => {
     const effectiveId = id === "__custom__" ? customId : id;
     localStorage.setItem(STORAGE_KEY, effectiveId);
-    toast.success("Voice saved");
+    try {
+      await saveConfigKey("elevenlabs_voice_id", effectiveId);
+      toast.success("Voice saved to server");
+    } catch {
+      toast.warning("Voice saved locally (server unreachable)");
+    }
   };
 
   return (
@@ -164,6 +196,13 @@ export default function Settings() {
   const [telephonyProvider, setTelephonyProvider] = useState("livekit_sip");
   const [theme, setTheme]                         = useState("system");
   const [notifEnabled, setNotifEnabled]           = useState(true);
+  const [serverKeys, setServerKeys]               = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getConfiguredKeys().then(setServerKeys).catch(() => {});
+  }, []);
+
+  const sv = (key: string) => serverKeys[key];
 
   const save = () => toast.success("Settings saved");
 
@@ -221,16 +260,12 @@ export default function Settings() {
         <TabsContent value="llm" className="space-y-4">
           <SettingsSection title="LLM Providers" description="Configure language model API keys">
             <div className="space-y-4">
-              <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-primary">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                Changes here are saved locally. Production deployments use server environment variables.
-              </div>
-              <ApiKeyRow label="Groq API Key"        storageKey="groq_key"         placeholder="gsk_••••••••••••" hint="Used for llama-3.3-70b-versatile and other Groq models" />
-              <ApiKeyRow label="OpenAI API Key"       storageKey="openai_key"       placeholder="sk-••••••••••••" />
-              <ApiKeyRow label="Anthropic API Key"    storageKey="anthropic_key"    placeholder="sk-ant-••••••••" />
-              <ApiKeyRow label="Gemini API Key"       storageKey="gemini_key"       placeholder="AIza••••••••••••" />
-              <ApiKeyRow label="DeepSeek API Key"     storageKey="deepseek_key"     placeholder="sk-••••••••••••" />
-              <ApiKeyRow label="OpenRouter API Key"   storageKey="openrouter_key"   placeholder="sk-or-••••••••••••" />
+              <ApiKeyRow label="Groq API Key"        storageKey="groq_key"       backendKey="groq_api_key"     serverValue={sv("groq_api_key")}     placeholder="gsk_••••••••••••" hint="Used for llama-3.3-70b-versatile and other Groq models" />
+              <ApiKeyRow label="OpenAI API Key"       storageKey="openai_key"     placeholder="sk-••••••••••••" />
+              <ApiKeyRow label="Anthropic API Key"    storageKey="anthropic_key"  placeholder="sk-ant-••••••••" />
+              <ApiKeyRow label="Gemini API Key"       storageKey="gemini_key"     placeholder="AIza••••••••••••" />
+              <ApiKeyRow label="DeepSeek API Key"     storageKey="deepseek_key"   placeholder="sk-••••••••••••" />
+              <ApiKeyRow label="OpenRouter API Key"   storageKey="openrouter_key" placeholder="sk-or-••••••••••••" />
             </div>
           </SettingsSection>
         </TabsContent>
@@ -239,9 +274,9 @@ export default function Settings() {
         <TabsContent value="voice" className="space-y-4">
           <SettingsSection title="Voice (TTS) Providers" description="Text-to-speech API credentials">
             <div className="space-y-4">
-              <ApiKeyRow label="ElevenLabs API Key" storageKey="elevenlabs_key" placeholder="••••••••••••" />
+              <ApiKeyRow label="ElevenLabs API Key" storageKey="elevenlabs_key" backendKey="elevenlabs_api_key" serverValue={sv("elevenlabs_api_key")} placeholder="••••••••••••" />
               <div className="border-t border-border pt-4">
-                <ElevenLabsVoicePicker />
+                <ElevenLabsVoicePicker serverValue={sv("elevenlabs_voice_id")} />
               </div>
               <div className="border-t border-border pt-4 space-y-4">
                 <ApiKeyRow label="Azure Speech Key"  storageKey="azure_speech_key" placeholder="••••••••••••" />
@@ -255,9 +290,9 @@ export default function Settings() {
         <TabsContent value="stt" className="space-y-4">
           <SettingsSection title="Speech-to-Text Providers" description="Transcription API credentials">
             <div className="space-y-4">
-              <ApiKeyRow label="Deepgram API Key"     storageKey="deepgram_key"     placeholder="••••••••••••" hint="Used for nova-2 real-time transcription" />
-              <ApiKeyRow label="AssemblyAI API Key"   storageKey="assemblyai_key"   placeholder="••••••••••••" />
-              <ApiKeyRow label="Azure Speech Key"     storageKey="azure_stt_key"    placeholder="••••••••••••" />
+              <ApiKeyRow label="Deepgram API Key"     storageKey="deepgram_key"   backendKey="deepgram_api_key" serverValue={sv("deepgram_api_key")} placeholder="••••••••••••" hint="Used for nova-2 real-time transcription" />
+              <ApiKeyRow label="AssemblyAI API Key"   storageKey="assemblyai_key" placeholder="••••••••••••" />
+              <ApiKeyRow label="Azure Speech Key"     storageKey="azure_stt_key"  placeholder="••••••••••••" />
             </div>
           </SettingsSection>
         </TabsContent>
@@ -287,18 +322,18 @@ export default function Settings() {
               </div>
               <div className="border-t border-border pt-4 space-y-4">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">LiveKit SIP</p>
-                <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url" placeholder="wss://project.livekit.cloud" />
-                <ApiKeyRow label="LiveKit API Key"    storageKey="livekit_api_key" />
-                <ApiKeyRow label="LiveKit API Secret" storageKey="livekit_api_secret" />
-                <ApiKeyRow label="SIP Trunk ID"       storageKey="livekit_sip_trunk_id" />
+                <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url"          backendKey="livekit_url"          serverValue={sv("livekit_url")}          placeholder="wss://project.livekit.cloud" />
+                <ApiKeyRow label="LiveKit API Key"    storageKey="livekit_api_key"      backendKey="livekit_api_key"      serverValue={sv("livekit_api_key")} />
+                <ApiKeyRow label="LiveKit API Secret" storageKey="livekit_api_secret"   backendKey="livekit_api_secret"   serverValue={sv("livekit_api_secret")} />
+                <ApiKeyRow label="SIP Trunk ID"       storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} />
               </div>
               {telephonyProvider === "signalwire" && (
                 <div className="border-t border-border pt-4 space-y-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SignalWire</p>
-                  <ApiKeyRow label="Project ID"    storageKey="sw_project_id" />
-                  <ApiKeyRow label="API Token"     storageKey="sw_api_token" />
-                  <ApiKeyRow label="Space URL"     storageKey="sw_space_url" placeholder="yourspace.signalwire.com" />
-                  <ApiKeyRow label="From Number"   storageKey="sw_from_number" placeholder="+1 (415) 555-0100" />
+                  <ApiKeyRow label="Project ID"    storageKey="sw_project_id"  backendKey="signalwire_project_id" serverValue={sv("signalwire_project_id")} />
+                  <ApiKeyRow label="API Token"     storageKey="sw_api_token"   backendKey="signalwire_api_token"  serverValue={sv("signalwire_api_token")} />
+                  <ApiKeyRow label="Space URL"     storageKey="sw_space_url"   backendKey="signalwire_space_url"  serverValue={sv("signalwire_space_url")}  placeholder="yourspace.signalwire.com" />
+                  <ApiKeyRow label="From Number"   storageKey="sw_from_number" backendKey="signalwire_from_number" serverValue={sv("signalwire_from_number")} placeholder="+1 (415) 555-0100" />
                 </div>
               )}
             </div>
@@ -309,15 +344,15 @@ export default function Settings() {
         <TabsContent value="api-keys" className="space-y-4">
           <SettingsSection title="All API Keys" description="Quick access to all provider credentials">
             <div className="grid gap-4 sm:grid-cols-2">
-              <ApiKeyRow label="Groq"         storageKey="groq_key" />
-              <ApiKeyRow label="OpenAI"       storageKey="openai_key" />
-              <ApiKeyRow label="Deepgram"     storageKey="deepgram_key" />
-              <ApiKeyRow label="ElevenLabs"   storageKey="elevenlabs_key" />
-              <ApiKeyRow label="LiveKit URL"  storageKey="livekit_url" />
-              <ApiKeyRow label="LiveKit Key"  storageKey="livekit_api_key" />
-              <ApiKeyRow label="LiveKit Secret" storageKey="livekit_api_secret" />
-              <ApiKeyRow label="SignalWire Project" storageKey="sw_project_id" />
-              <ApiKeyRow label="SignalWire Token"   storageKey="sw_api_token" />
+              <ApiKeyRow label="Groq"               storageKey="groq_key"           backendKey="groq_api_key"          serverValue={sv("groq_api_key")} />
+              <ApiKeyRow label="OpenAI"             storageKey="openai_key" />
+              <ApiKeyRow label="Deepgram"           storageKey="deepgram_key"       backendKey="deepgram_api_key"      serverValue={sv("deepgram_api_key")} />
+              <ApiKeyRow label="ElevenLabs"         storageKey="elevenlabs_key"     backendKey="elevenlabs_api_key"    serverValue={sv("elevenlabs_api_key")} />
+              <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url"        backendKey="livekit_url"           serverValue={sv("livekit_url")} />
+              <ApiKeyRow label="LiveKit Key"        storageKey="livekit_api_key"    backendKey="livekit_api_key"       serverValue={sv("livekit_api_key")} />
+              <ApiKeyRow label="LiveKit Secret"     storageKey="livekit_api_secret" backendKey="livekit_api_secret"    serverValue={sv("livekit_api_secret")} />
+              <ApiKeyRow label="SignalWire Project" storageKey="sw_project_id"      backendKey="signalwire_project_id" serverValue={sv("signalwire_project_id")} />
+              <ApiKeyRow label="SignalWire Token"   storageKey="sw_api_token"       backendKey="signalwire_api_token"  serverValue={sv("signalwire_api_token")} />
             </div>
           </SettingsSection>
         </TabsContent>
