@@ -21,10 +21,10 @@ export default function LiveCalls() {
   const [loading, setLoading]         = useState(true);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     Promise.all([getActiveCall(), listCalls()]).then(([active, calls]) => {
-      if (active) setActiveCallId(active.id);
+      setActiveCallId(active?.id ?? null);
       setRecentCalls(
         calls
           .filter((c) => ["connected", "dialing", "ringing"].includes(c.status))
@@ -37,7 +37,7 @@ export default function LiveCalls() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(() => load(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
