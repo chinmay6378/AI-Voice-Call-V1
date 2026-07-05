@@ -1,4 +1,7 @@
-export type CallStatus = "queued" | "dialing" | "ringing" | "connected" | "completed" | "failed";
+export type CallStatus =
+  | "queued" | "dialing" | "ringing" | "connected"
+  | "completed" | "voicemail" | "no_answer" | "busy"
+  | "failed" | "cancelled";
 
 export const CALL_STATES: CallStatus[] = ["queued", "dialing", "ringing", "connected", "completed"];
 
@@ -11,6 +14,7 @@ export interface Call {
   duration: number; // seconds
   date: string; // ISO
   summary?: string;
+  errorMessage?: string;
   transcript?: { speaker: "ai" | "customer"; text: string; ts: string }[];
   events?: { ts: string; type: string; message: string }[];
   timeline?: { state: CallStatus; ts: string }[];

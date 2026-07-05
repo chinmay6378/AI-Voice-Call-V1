@@ -57,6 +57,43 @@ def get_livekit(settings: Annotated[Settings, Depends(get_settings)]) -> LiveKit
     return LiveKitRoomManager(settings)
 
 
+def _check_credentials(settings: Settings) -> None:
+    """Raise HTTP 400 with a clear list of missing credentials before we attempt a call."""
+    missing: list[str] = []
+
+    # Always required (STT / LLM / TTS)
+    if not settings.groq_api_key:        missing.append("Groq API Key")
+    if not settings.deepgram_api_key:    missing.append("Deepgram API Key")
+    if not settings.elevenlabs_api_key:  missing.append("ElevenLabs API Key")
+
+    # LiveKit is always needed (room + agent dispatch)
+    if not settings.livekit_url:         missing.append("LiveKit URL")
+    if not settings.livekit_api_key:     missing.append("LiveKit API Key")
+    if not settings.livekit_api_secret:  missing.append("LiveKit API Secret")
+
+    provider = (settings.telephony_provider or "livekit_sip").lower()
+    if provider == "livekit_sip":
+        if not settings.livekit_sip_trunk_id:
+            missing.append("LiveKit SIP Trunk ID (for Vobiz)")
+    elif provider == "signalwire":
+        if not settings.signalwire_project_id: missing.append("SignalWire Project ID")
+        if not settings.signalwire_api_token:  missing.append("SignalWire API Token")
+        if not settings.signalwire_space_url:  missing.append("SignalWire Space URL")
+        if not settings.signalwire_from_number: missing.append("SignalWire From Number")
+        if not settings.app_base_url or "localhost" in settings.app_base_url:
+            missing.append("App Base URL (must be public — SignalWire webhooks need to reach it)")
+
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "Cannot start call — missing required credentials.",
+                "missing": missing,
+                "hint": "Go to Settings and save the missing values.",
+            },
+        )
+
+
 # ── POST /call/start ──────────────────────────────────────────────────────────
 
 @router.post("/start", response_model=CallStartedResponse, status_code=status.HTTP_201_CREATED)
@@ -78,6 +115,9 @@ async def start_call(
       5. LiveKit dials the customer via Vobiz SIP trunk.
       6. Return call_id immediately — the rest is async.
     """
+    # 0. Pre-flight: verify all required credentials are configured
+    _check_credentials(settings)
+
     # 1. One-call-at-a-time guard
     active = await get_active_call(session)
     if active:

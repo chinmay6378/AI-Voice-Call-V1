@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Bot, User, Clock, PhoneCall } from "lucide-react";
+import { ArrowLeft, Bot, User, Clock, PhoneOff, VoicemailIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,6 +49,26 @@ export default function CallDetails() {
           </div>
         </div>
       </div>
+
+      {/* ── Machine / voicemail / error banners ── */}
+      {call.status === "voicemail" && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+          <VoicemailIcon className="h-4 w-4 shrink-0" />
+          <span><strong>Voicemail detected.</strong> Agent left a voicemail message and ended the call.</span>
+        </div>
+      )}
+      {call.status === "no_answer" && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          <PhoneOff className="h-4 w-4 shrink-0" />
+          <span><strong>IVR / Machine detected.</strong> Agent detected an automated system and ended the call.</span>
+        </div>
+      )}
+      {call.status === "failed" && call.errorMessage && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span><strong>Error:</strong> {call.errorMessage}</span>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-4">
         <MetaTile label="Property" value={call.propertyType} />

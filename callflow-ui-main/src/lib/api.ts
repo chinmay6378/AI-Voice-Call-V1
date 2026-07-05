@@ -19,6 +19,7 @@ interface BackendCall {
   duration_seconds: number | null;
   error_message: string | null;
   livekit_room_name: string | null;
+  answered_by: string | null;
 }
 
 interface BackendTranscript {
@@ -37,16 +38,16 @@ interface BackendLog {
 // ── Status mapping ────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<string, CallStatus> = {
-  pending: "queued",
-  dialing: "dialing",
-  ringing: "ringing",
+  pending:     "queued",
+  dialing:     "dialing",
+  ringing:     "ringing",
   in_progress: "connected",
-  voicemail: "completed",
-  completed: "completed",
-  failed: "failed",
-  no_answer: "failed",
-  busy: "failed",
-  cancelled: "failed",
+  voicemail:   "voicemail",
+  completed:   "completed",
+  failed:      "failed",
+  no_answer:   "no_answer",
+  busy:        "busy",
+  cancelled:   "cancelled",
 };
 
 // ── Transform helpers ─────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ function toCall(r: BackendCall): Call {
     status: STATUS_MAP[r.status] ?? "failed",
     duration: r.duration_seconds ?? 0,
     date: r.created_at,
+    errorMessage: r.error_message ?? undefined,
   };
 }
 

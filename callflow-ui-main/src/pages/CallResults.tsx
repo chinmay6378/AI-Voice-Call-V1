@@ -24,7 +24,7 @@ import type { Call } from "@/lib/mock-data";
 import { formatDate, formatDuration } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-const STATUS_OPTIONS = ["all","dialing","ringing","connected","completed","failed"];
+const STATUS_OPTIONS = ["all","connected","completed","voicemail","no_answer","busy","failed","dialing","ringing","cancelled"];
 
 export default function CallResults() {
   const [calls, setCalls]       = useState<Call[]>([]);
@@ -56,7 +56,8 @@ export default function CallResults() {
   const stats = {
     total:     calls.length,
     completed: calls.filter((c) => c.status === "completed").length,
-    failed:    calls.filter((c) => c.status === "failed").length,
+    voicemail: calls.filter((c) => c.status === "voicemail").length,
+    no_answer: calls.filter((c) => ["no_answer","busy","failed"].includes(c.status)).length,
     active:    calls.filter((c) => ["connected","dialing","ringing"].includes(c.status)).length,
   };
 
@@ -132,10 +133,11 @@ export default function CallResults() {
       {/* ── Summary badges ── */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { label: "Total",     value: stats.total,     style: "" },
-          { label: "Completed", value: stats.completed,  style: "border-success/30 bg-success/5 text-success" },
-          { label: "Failed",    value: stats.failed,     style: "border-destructive/30 bg-destructive/5 text-destructive" },
-          { label: "Active",    value: stats.active,     style: "border-primary/30 bg-primary/5 text-primary" },
+          { label: "Total",      value: stats.total,     style: "" },
+          { label: "Connected",  value: stats.completed,  style: "border-success/30 bg-success/5 text-success" },
+          { label: "Voicemail",  value: stats.voicemail,  style: "border-warning/30 bg-warning/5 text-warning" },
+          { label: "No Answer",  value: stats.no_answer,  style: "border-border bg-muted/50 text-muted-foreground" },
+          { label: "Active",     value: stats.active,     style: "border-primary/30 bg-primary/5 text-primary" },
         ].map((s) => (
           <Badge key={s.label} variant="outline" className={s.style}>
             {s.label}: {s.value}
@@ -196,7 +198,7 @@ export default function CallResults() {
                     <TableCell className="tabular-nums text-sm">{formatDuration(c.duration)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{formatDate(c.date)}</TableCell>
                     <TableCell>
-                      <DispositionBadge status={c.status} hasSummary={!!c.summary} />
+                      <DispositionBadge status={c.status} hasSummary={!!c.summary} errorMessage={c.errorMessage} />
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -222,15 +224,30 @@ export default function CallResults() {
   );
 }
 
-function DispositionBadge({ status, hasSummary }: { status: string; hasSummary: boolean }) {
-  if (status === "completed" && hasSummary) {
-    return <Badge variant="outline" className="border-success/30 bg-success/5 text-success text-[10px]">Interested</Badge>;
-  }
-  if (status === "completed") {
-    return <Badge variant="outline" className="text-[10px]">Completed</Badge>;
-  }
-  if (status === "failed") {
-    return <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-destructive text-[10px]">No Answer</Badge>;
-  }
+function DispositionBadge({ status, hasSummary, errorMessage }: { status: string; hasSummary: boolean; errorMessage?: string }) {
+  if (status === "voicemail") return (
+    <Badge variant="outline" className="border-warning/30 bg-warning/5 text-warning text-[10px]">Voicemail Left</Badge>
+  );
+  if (status === "no_answer") return (
+    <Badge variant="outline" className="border-border bg-muted/50 text-muted-foreground text-[10px]">No Answer</Badge>
+  );
+  if (status === "busy") return (
+    <Badge variant="outline" className="border-border bg-muted/50 text-muted-foreground text-[10px]">Busy</Badge>
+  );
+  if (status === "cancelled") return (
+    <Badge variant="outline" className="border-border text-muted-foreground text-[10px]">Cancelled</Badge>
+  );
+  if (status === "failed") return (
+    <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-destructive text-[10px]"
+      title={errorMessage ?? "Call failed"}>
+      {errorMessage ? "Error" : "Failed"}
+    </Badge>
+  );
+  if (status === "completed" && hasSummary) return (
+    <Badge variant="outline" className="border-success/30 bg-success/5 text-success text-[10px]">Connected</Badge>
+  );
+  if (status === "completed") return (
+    <Badge variant="outline" className="text-[10px]">Completed</Badge>
+  );
   return <Badge variant="outline" className="text-muted-foreground text-[10px]">—</Badge>;
 }
