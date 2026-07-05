@@ -82,8 +82,9 @@ _GOODBYE_PHRASES = [
 
 # Phrases that indicate an answering machine / voicemail greeting
 _VOICEMAIL_PHRASES = [
+    # Universal voicemail indicators
     "leave a message", "leave your message", "leave me a message",
-    "not available", "is unavailable", "unavailable to answer",
+    "is not available", "is unavailable", "unavailable to answer",
     "cannot take your call", "can't take your call",
     "you have reached", "you've reached",
     "please leave", "after the beep", "after the tone",
@@ -92,6 +93,18 @@ _VOICEMAIL_PHRASES = [
     "mailbox is full", "mailbox",
     "voicemail", "no one is available",
     "unable to answer", "try your call again",
+    # Common carrier / mobile network messages
+    "not responding", "currently unavailable",
+    "currently switched off", "switched off",
+    "not reachable", "out of reach",
+    "the subscriber you", "the subscriber is",
+    "not able to take your call",
+    "currently not available",
+    "try calling later", "please try again later",
+    "is currently busy", "the person you are",
+    "the number you have dialed", "the number you are trying",
+    "please call after", "call again later",
+    "will get back to you",
 ]
 
 # Phrases that indicate an IVR / automated phone system
@@ -105,6 +118,9 @@ _IVR_PHRASES = [
     "estimated wait time", "estimated wait is",
     "our menu options", "our menu has changed",
     "listen carefully as our", "say the name of",
+    "for more options", "to repeat this menu",
+    "to speak with", "to leave a message press",
+    "our business hours", "we are closed",
 ]
 
 class VoiceCallAgent(Agent):
@@ -137,10 +153,24 @@ class VoiceCallAgent(Agent):
         self._hangup_scheduled = False
         self._machine_type: str | None = None          # "voicemail" | "ivr" | None
         self._call_end_status: CallStatus = CallStatus.COMPLETED
+        self._machine_detected_event: asyncio.Event = asyncio.Event()
 
     async def on_enter(self) -> None:
         logger.info("agent.on_enter", call_id=self.call_id)
-        await asyncio.sleep(1.0)
+        # Listen-first AMD window: wait up to 2s for the other end to speak.
+        # Voicemail/IVR greetings start within ~0.5s of connect, so Deepgram
+        # will transcribe them and on_user_turn_completed sets _machine_detected_event
+        # before we get here after the wait — allowing us to skip the greeting entirely.
+        try:
+            await asyncio.wait_for(self._machine_detected_event.wait(), timeout=2.0)
+            logger.info("agent.machine_detected_pre_greeting", call_id=self.call_id)
+            return  # llm_node will deliver the canned machine message
+        except asyncio.TimeoutError:
+            pass
+
+        if self._hangup_scheduled:
+            return
+
         greeting = (
             self._settings.agent_initial_greeting
             .replace("{customer_name}", self.customer_name)
@@ -148,7 +178,7 @@ class VoiceCallAgent(Agent):
             .replace("{company_name}", self._settings.company_name)
         )
         logger.info("agent.saying_greeting", call_id=self.call_id, greeting=greeting[:60])
-        await self.session.say(greeting, allow_interruptions=False)
+        await self.session.say(greeting, allow_interruptions=True)
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -167,10 +197,12 @@ class VoiceCallAgent(Agent):
                     logger.info("amd.ivr_detected", call_id=self.call_id, text=text[:80])
                     self._machine_type = "ivr"
                     self._call_end_status = CallStatus.NO_ANSWER
+                    self._machine_detected_event.set()
                 elif any(p in lower for p in _VOICEMAIL_PHRASES):
                     logger.info("amd.voicemail_detected", call_id=self.call_id, text=text[:80])
                     self._machine_type = "voicemail"
                     self._call_end_status = CallStatus.VOICEMAIL
+                    self._machine_detected_event.set()
 
         # Inject English-only rule directly into the turn context — this IS
         # the chat_ctx that llm_node receives, so it's guaranteed to reach the LLM.
