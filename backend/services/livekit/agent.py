@@ -410,6 +410,10 @@ async def entrypoint(ctx: JobContext) -> None:
             if not sip_reason and _sip_disconnect_reason:
                 sip_reason = _sip_disconnect_reason[0].upper()
 
+            # SDK returns raw protobuf int — translate to name
+            _numeric = {"11": "USER_UNAVAILABLE", "12": "USER_REJECTED", "13": "SIP_TRUNK_FAILURE"}
+            sip_reason = _numeric.get(sip_reason, sip_reason)
+
             logger.info("call.sip_reason_check", call_id=call_id, sip_reason=sip_reason or "none")
 
             if "USER_REJECTED" in sip_reason or "USER_UNAVAILABLE" in sip_reason:
