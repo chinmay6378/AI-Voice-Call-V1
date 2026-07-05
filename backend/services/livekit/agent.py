@@ -292,9 +292,19 @@ async def entrypoint(ctx: JobContext) -> None:
 
     # Fires when the customer hangs up, room closes, or agent says goodbye
     disconnect_event = asyncio.Event()
+    _sip_disconnect_reason: list[str] = []
+
+    def _on_participant_disconnected(participant, *args) -> None:
+        try:
+            reason = getattr(participant, "disconnect_reason", None)
+            if reason is not None:
+                _sip_disconnect_reason.append(str(reason))
+        except Exception:
+            pass
+        disconnect_event.set()
+
     ctx.room.on("disconnected", lambda *_: disconnect_event.set())
-    # Fire on ANY remote participant leaving (customer SIP, etc.)
-    ctx.room.on("participant_disconnected", lambda p: disconnect_event.set())
+    ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
     agent: VoiceCallAgent | None = None
     try:
@@ -350,6 +360,17 @@ async def entrypoint(ctx: JobContext) -> None:
     finally:
         logger.info("agent.session_ended", call_id=call_id)
         end_status = agent._call_end_status if agent else CallStatus.COMPLETED
+
+        # Map SIP disconnect reason to call status when the agent didn't initiate hangup
+        if (not agent or not agent._hangup_scheduled) and end_status == CallStatus.COMPLETED:
+            reason_str = (_sip_disconnect_reason[0] if _sip_disconnect_reason else "").upper()
+            if "USER_REJECTED" in reason_str or "USER_UNAVAILABLE" in reason_str:
+                end_status = CallStatus.NO_ANSWER
+                logger.info("call.status_from_sip", call_id=call_id, reason=reason_str, mapped="no_answer")
+            elif "SIP_TRUNK_FAILURE" in reason_str:
+                end_status = CallStatus.FAILED
+                logger.info("call.status_from_sip", call_id=call_id, reason=reason_str, mapped="failed")
+
         await _end_call_db(call_id, end_status)
 
 
