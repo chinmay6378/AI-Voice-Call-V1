@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings, get_settings
+from services.signalwire.client import SignalWireClient
 from database import (
     create_call,
     finalize_call,
@@ -126,28 +127,53 @@ async def start_call(
             detail=f"Failed to dispatch agent: {exc}",
         )
 
-    # 5. Dial customer via LiveKit SIP (Vobiz trunk)
-    try:
-        participant_id = await lk.create_sip_participant(
-            room_name,
-            phone_number=body.phone_number,
-            customer_name=body.customer_name,
-            call_id=call.id,
-        )
-        await update_call_sid(session, call.id, participant_id)
-        logger.info("call.initiated", call_id=call.id, participant_id=participant_id, to=body.phone_number)
-    except Exception as exc:
-        logger.error("livekit.sip_call_failed", call_id=call.id, error=str(exc))
-        await finalize_call(session, call.id, status=CallStatus.FAILED, error_message=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to initiate call via LiveKit SIP: {exc}",
-        )
+    # 5. Dial customer — branch on configured telephony provider
+    provider = (settings.telephony_provider or "livekit_sip").lower()
+
+    if provider == "signalwire":
+        # SignalWire dials the number; on answer it hits /webhooks/swml/{call_id}
+        # which returns SWML that bridges the call into the LiveKit room.
+        sw = SignalWireClient(settings)
+        base = settings.app_base_url.rstrip("/")
+        try:
+            call_sid = await sw.create_outbound_call(
+                to=body.phone_number,
+                swml_webhook_url=f"{base}/webhooks/swml/{call.id}",
+                status_callback_url=f"{base}/webhooks/status/{call.id}",
+                amd_callback_url=f"{base}/webhooks/amd/{call.id}",
+            )
+            await update_call_sid(session, call.id, call_sid)
+            logger.info("call.initiated_signalwire", call_id=call.id, sid=call_sid, to=body.phone_number)
+        except Exception as exc:
+            logger.error("signalwire.call_failed", call_id=call.id, error=str(exc))
+            await finalize_call(session, call.id, status=CallStatus.FAILED, error_message=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to initiate call via SignalWire: {exc}",
+            )
+    else:
+        # LiveKit SIP — dials directly via Vobiz SIP trunk
+        try:
+            participant_id = await lk.create_sip_participant(
+                room_name,
+                phone_number=body.phone_number,
+                customer_name=body.customer_name,
+                call_id=call.id,
+            )
+            await update_call_sid(session, call.id, participant_id)
+            logger.info("call.initiated_livekit_sip", call_id=call.id, participant_id=participant_id, to=body.phone_number)
+        except Exception as exc:
+            logger.error("livekit.sip_call_failed", call_id=call.id, error=str(exc))
+            await finalize_call(session, call.id, status=CallStatus.FAILED, error_message=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to initiate call via LiveKit SIP: {exc}",
+            )
 
     return CallStartedResponse(
         call_id=call.id,
         status=CallStatus.DIALING,
-        message=f"Outbound call to {body.phone_number} initiated. call_id={call.id}",
+        message=f"Outbound call to {body.phone_number} initiated via {provider}. call_id={call.id}",
     )
 
 

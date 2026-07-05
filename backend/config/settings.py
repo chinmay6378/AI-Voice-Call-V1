@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     voicemail_audio_url: str = ""      # Optional: URL to pre-recorded voicemail MP3
 
     # ── Call Constraints ──────────────────────────────────────────────────────
+    # ── Telephony Provider ────────────────────────────────────────────────────────
+    telephony_provider: str = "livekit_sip"  # "livekit_sip" | "signalwire"
+
+    # ── Call Constraints ──────────────────────────────────────────────────────────
     max_call_duration_seconds: int = 600     # 10-minute hard limit
     amd_timeout_seconds: int = 30            # AMD detection timeout
 

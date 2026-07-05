@@ -13,6 +13,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 # Only expose fields that the UI legitimately needs to set.
 ALLOWED_KEYS = {
+    "telephony_provider",
     "groq_api_key",
     "deepgram_api_key",
     "elevenlabs_api_key",
@@ -21,6 +22,7 @@ ALLOWED_KEYS = {
     "livekit_api_key",
     "livekit_api_secret",
     "livekit_sip_trunk_id",
+    "livekit_sip_uri",
     "signalwire_project_id",
     "signalwire_api_token",
     "signalwire_space_url",

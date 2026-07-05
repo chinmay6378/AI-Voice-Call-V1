@@ -199,7 +199,10 @@ export default function Settings() {
   const [serverKeys, setServerKeys]               = useState<Record<string, string>>({});
 
   useEffect(() => {
-    getConfiguredKeys().then(setServerKeys).catch(() => {});
+    getConfiguredKeys().then((keys) => {
+      setServerKeys(keys);
+      if (keys["telephony_provider"]) setTelephonyProvider(keys["telephony_provider"]);
+    }).catch(() => {});
   }, []);
 
   const sv = (key: string) => serverKeys[key];
@@ -304,16 +307,24 @@ export default function Settings() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Active Provider</Label>
-                  <Select value={telephonyProvider} onValueChange={setTelephonyProvider}>
+                  <Select
+                    value={telephonyProvider}
+                    onValueChange={(v) => {
+                      setTelephonyProvider(v);
+                      saveConfigKey("telephony_provider", v).catch(() => {});
+                    }}
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="livekit_sip">LiveKit SIP</SelectItem>
-                      <SelectItem value="signalwire">SignalWire</SelectItem>
-                      <SelectItem value="twilio">Twilio</SelectItem>
-                      <SelectItem value="plivo">Plivo</SelectItem>
-                      <SelectItem value="vobiz">Vobiz</SelectItem>
+                      <SelectItem value="livekit_sip">LiveKit SIP (Vobiz — India)</SelectItem>
+                      <SelectItem value="signalwire">SignalWire (International)</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {telephonyProvider === "signalwire"
+                      ? "SignalWire will dial the number. On answer, call bridges into LiveKit via your SIP URI."
+                      : "LiveKit dials directly via the Vobiz SIP trunk configured below."}
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Caller ID</Label>
@@ -325,14 +336,19 @@ export default function Settings() {
                 <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url"          backendKey="livekit_url"          serverValue={sv("livekit_url")}          placeholder="wss://project.livekit.cloud" />
                 <ApiKeyRow label="LiveKit API Key"    storageKey="livekit_api_key"      backendKey="livekit_api_key"      serverValue={sv("livekit_api_key")} />
                 <ApiKeyRow label="LiveKit API Secret" storageKey="livekit_api_secret"   backendKey="livekit_api_secret"   serverValue={sv("livekit_api_secret")} />
-                <ApiKeyRow label="SIP Trunk ID"       storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} />
+                {telephonyProvider === "livekit_sip" && (
+                  <ApiKeyRow label="SIP Trunk ID (Vobiz)" storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} hint="Trunk ID from LiveKit dashboard for Vobiz" />
+                )}
+                {telephonyProvider === "signalwire" && (
+                  <ApiKeyRow label="LiveKit SIP URI" storageKey="livekit_sip_uri" backendKey="livekit_sip_uri" serverValue={sv("livekit_sip_uri")} placeholder="sip.livekit.cloud" hint="Inbound SIP URI — SignalWire bridges the answered call here" />
+                )}
               </div>
               {telephonyProvider === "signalwire" && (
                 <div className="border-t border-border pt-4 space-y-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SignalWire</p>
-                  <ApiKeyRow label="Project ID"    storageKey="sw_project_id"  backendKey="signalwire_project_id" serverValue={sv("signalwire_project_id")} />
-                  <ApiKeyRow label="API Token"     storageKey="sw_api_token"   backendKey="signalwire_api_token"  serverValue={sv("signalwire_api_token")} />
-                  <ApiKeyRow label="Space URL"     storageKey="sw_space_url"   backendKey="signalwire_space_url"  serverValue={sv("signalwire_space_url")}  placeholder="yourspace.signalwire.com" />
+                  <ApiKeyRow label="Project ID"    storageKey="sw_project_id"  backendKey="signalwire_project_id"  serverValue={sv("signalwire_project_id")} />
+                  <ApiKeyRow label="API Token"     storageKey="sw_api_token"   backendKey="signalwire_api_token"   serverValue={sv("signalwire_api_token")} />
+                  <ApiKeyRow label="Space URL"     storageKey="sw_space_url"   backendKey="signalwire_space_url"   serverValue={sv("signalwire_space_url")}  placeholder="yourspace.signalwire.com" />
                   <ApiKeyRow label="From Number"   storageKey="sw_from_number" backendKey="signalwire_from_number" serverValue={sv("signalwire_from_number")} placeholder="+1 (415) 555-0100" />
                 </div>
               )}
