@@ -395,15 +395,29 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.info("agent.session_ended", call_id=call_id)
         end_status = agent._call_end_status if agent else CallStatus.COMPLETED
 
-        # Map SIP disconnect reason to call status when the agent didn't initiate hangup
+        # Map SIP disconnect reason to call status when the agent didn't initiate hangup.
+        # Read reason directly from participant (SDK sets it before firing the event, so it's
+        # available here even if our event callback lost the race with task cancellation).
         if (not agent or not agent._hangup_scheduled) and end_status == CallStatus.COMPLETED:
-            reason_str = (_sip_disconnect_reason[0] if _sip_disconnect_reason else "").upper()
-            if "USER_REJECTED" in reason_str or "USER_UNAVAILABLE" in reason_str:
+            sip_reason = ""
+            try:
+                dr = getattr(customer_participant, "disconnect_reason", None)
+                if dr:
+                    sip_reason = (getattr(dr, "name", None) or str(dr)).upper()
+            except Exception:
+                pass
+            # Fallback to event-based capture
+            if not sip_reason and _sip_disconnect_reason:
+                sip_reason = _sip_disconnect_reason[0].upper()
+
+            logger.info("call.sip_reason_check", call_id=call_id, sip_reason=sip_reason or "none")
+
+            if "USER_REJECTED" in sip_reason or "USER_UNAVAILABLE" in sip_reason:
                 end_status = CallStatus.NO_ANSWER
-                logger.info("call.status_from_sip", call_id=call_id, reason=reason_str, mapped="no_answer")
-            elif "SIP_TRUNK_FAILURE" in reason_str:
+                logger.info("call.status_from_sip", call_id=call_id, reason=sip_reason, mapped="no_answer")
+            elif "SIP_TRUNK_FAILURE" in sip_reason:
                 end_status = CallStatus.FAILED
-                logger.info("call.status_from_sip", call_id=call_id, reason=reason_str, mapped="failed")
+                logger.info("call.status_from_sip", call_id=call_id, reason=sip_reason, mapped="failed")
 
         await _end_call_db(call_id, end_status)
 
