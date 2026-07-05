@@ -328,9 +328,11 @@ async def entrypoint(ctx: JobContext) -> None:
 
     def _on_participant_disconnected(participant, *args) -> None:
         try:
-            reason = getattr(participant, "disconnect_reason", None)
+            # SDK passes reason as second positional arg; fallback to attribute
+            reason = args[0] if args else getattr(participant, "disconnect_reason", None)
             if reason is not None:
-                _sip_disconnect_reason.append(str(reason))
+                reason_str = getattr(reason, "name", None) or str(reason)
+                _sip_disconnect_reason.append(reason_str)
         except Exception:
             pass
         disconnect_event.set()
