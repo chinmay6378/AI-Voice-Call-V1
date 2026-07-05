@@ -80,6 +80,33 @@ _GOODBYE_PHRASES = [
     "have a wonderful", "have a nice", "no longer contact",
 ]
 
+# Phrases that indicate an answering machine / voicemail greeting
+_VOICEMAIL_PHRASES = [
+    "leave a message", "leave your message", "leave me a message",
+    "not available", "is unavailable", "unavailable to answer",
+    "cannot take your call", "can't take your call",
+    "you have reached", "you've reached",
+    "please leave", "after the beep", "after the tone",
+    "at the beep", "at the tone",
+    "record your message", "record a message",
+    "mailbox is full", "mailbox",
+    "voicemail", "no one is available",
+    "unable to answer", "try your call again",
+]
+
+# Phrases that indicate an IVR / automated phone system
+_IVR_PHRASES = [
+    "press 1", "press 2", "press 3", "press 4", "press 5",
+    "press 6", "press 7", "press 8", "press 9", "press 0",
+    "press zero", "press one", "press two", "press three",
+    "for english press", "para español", "para espanol",
+    "your call is important to us", "all of our representatives",
+    "all agents are", "currently experiencing high",
+    "estimated wait time", "estimated wait is",
+    "our menu options", "our menu has changed",
+    "listen carefully as our", "say the name of",
+]
+
 class VoiceCallAgent(Agent):
     """
     Conversational agent for outbound calls.
@@ -108,6 +135,8 @@ class VoiceCallAgent(Agent):
         self._session: AgentSession | None = None
         self._disconnect_event = disconnect_event
         self._hangup_scheduled = False
+        self._machine_type: str | None = None          # "voicemail" | "ivr" | None
+        self._call_end_status: CallStatus = CallStatus.COMPLETED
 
     async def on_enter(self) -> None:
         logger.info("agent.on_enter", call_id=self.call_id)
@@ -128,6 +157,21 @@ class VoiceCallAgent(Agent):
             text = _extract_text(new_message.content)
             logger.info("transcript.user", call_id=self.call_id, text=text)
             await _save_transcript(self.call_id, "customer", text)
+
+            # ── Machine / voicemail detection ────────────────────────────────
+            # Check the transcribed speech from the other end for machine cues.
+            # Must run before llm_node so the flag is set in time to intercept.
+            if not self._hangup_scheduled and self._machine_type is None:
+                lower = text.lower()
+                if any(p in lower for p in _IVR_PHRASES):
+                    logger.info("amd.ivr_detected", call_id=self.call_id, text=text[:80])
+                    self._machine_type = "ivr"
+                    self._call_end_status = CallStatus.NO_ANSWER
+                elif any(p in lower for p in _VOICEMAIL_PHRASES):
+                    logger.info("amd.voicemail_detected", call_id=self.call_id, text=text[:80])
+                    self._machine_type = "voicemail"
+                    self._call_end_status = CallStatus.VOICEMAIL
+
         # Inject English-only rule directly into the turn context — this IS
         # the chat_ctx that llm_node receives, so it's guaranteed to reach the LLM.
         turn_ctx.add_message(
@@ -141,6 +185,30 @@ class VoiceCallAgent(Agent):
         tools: list,
         model_settings: Any,
     ):
+        # ── Machine / voicemail short-circuit ────────────────────────────────
+        # Skip the LLM entirely and speak a canned message, then hang up.
+        if self._machine_type:
+            machine = self._machine_type
+            self._machine_type = None
+            self._hangup_scheduled = True
+
+            if machine == "voicemail":
+                msg = self._settings.agent_voicemail_message
+                delay = 7.0   # enough for TTS to finish the voicemail message
+            else:  # ivr
+                msg = "I'll try calling back at a better time. Goodbye."
+                delay = 3.0
+
+            logger.info("amd.speaking_machine_message", call_id=self.call_id, machine=machine)
+            yield llm.ChatChunk(
+                choices=[llm.Choice(
+                    delta=llm.ChoiceDelta(content=msg, role="assistant"),
+                    index=0,
+                )]
+            )
+            asyncio.ensure_future(self._schedule_hangup(delay))
+            return
+
         chat_ctx.add_message(
             role="system",
             content="FINAL REMINDER: Respond in English only. No Hindi. No exceptions.",
@@ -228,6 +296,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # Fire on ANY remote participant leaving (customer SIP, etc.)
     ctx.room.on("participant_disconnected", lambda p: disconnect_event.set())
 
+    agent: VoiceCallAgent | None = None
     try:
         session = AgentSession(
             stt=deepgram.STT(
@@ -280,7 +349,8 @@ async def entrypoint(ctx: JobContext) -> None:
         await asyncio.sleep(2)
     finally:
         logger.info("agent.session_ended", call_id=call_id)
-        await _end_call_db(call_id, CallStatus.COMPLETED)
+        end_status = agent._call_end_status if agent else CallStatus.COMPLETED
+        await _end_call_db(call_id, end_status)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
