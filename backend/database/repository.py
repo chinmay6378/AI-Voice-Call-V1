@@ -109,6 +109,17 @@ async def get_all_calls(session: AsyncSession, limit: int = 200) -> list[Call]:
     return list(result.scalars().all())
 
 
+async def get_calls_by_campaign(session: AsyncSession, campaign_id: str) -> list[Call]:
+    """Return all calls linked to a campaign via CampaignContact.call_id."""
+    result = await session.execute(
+        select(Call)
+        .join(CampaignContact, CampaignContact.call_id == Call.id)
+        .where(CampaignContact.campaign_id == campaign_id)
+        .order_by(Call.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 async def get_active_call(session: AsyncSession) -> Call | None:
     """Return the current in-progress call, if any."""
     active_statuses = [CallStatus.DIALING, CallStatus.RINGING, CallStatus.IN_PROGRESS]

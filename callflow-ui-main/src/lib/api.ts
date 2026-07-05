@@ -136,8 +136,11 @@ export async function endCall(callId: string): Promise<void> {
   await fetch(`${API_BASE}/call/end/${callId}`, { method: "POST" });
 }
 
-export async function listCalls(): Promise<Call[]> {
-  const res = await fetch(`${API_BASE}/calls`);
+export async function listCalls(campaignId?: string): Promise<Call[]> {
+  const url = campaignId
+    ? `${API_BASE}/calls?campaign_id=${encodeURIComponent(campaignId)}`
+    : `${API_BASE}/calls`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch calls");
   const data: BackendCall[] = await res.json();
   return data.map(toCall);

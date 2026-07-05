@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search, RefreshCw, Download, Eye, Filter,
-  PhoneOff, ChevronDown,
+  PhoneOff, ChevronDown, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,30 +19,56 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/StatusBadge";
-import { listCalls, getCallsExportUrl } from "@/lib/api";
+import { listCalls, getCampaign, getCallsExportUrl, getCampaignExportUrl } from "@/lib/api";
 import type { Call } from "@/lib/mock-data";
 import { formatDate, formatDuration } from "@/lib/mock-data";
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = ["all","connected","completed","voicemail","no_answer","busy","failed","dialing","ringing","cancelled"];
+const ACTIVE_STATUSES = new Set(["connected","dialing","ringing"]);
+const AUTO_REFRESH_MS = 5000;
 
 export default function CallResults() {
-  const [calls, setCalls]       = useState<Call[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [q, setQ]               = useState("");
+  const [calls, setCalls]               = useState<Call[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [q, setQ]                       = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const navigate = useNavigate();
+  const [campaignName, setCampaignName] = useState<string | null>(null);
+  const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
+  const campaignId = searchParams.get("campaign") ?? undefined;
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    listCalls().then((c) => { setCalls(c); setLoading(false); });
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
+    listCalls(campaignId)
+      .then((c) => { setCalls(c); setLoading(false); })
+      .catch(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  // Fetch campaign name once if filtered
+  useEffect(() => {
+    if (!campaignId) return;
+    getCampaign(campaignId)
+      .then((c) => setCampaignName(c.name))
+      .catch(() => setCampaignName(null));
+  }, [campaignId]);
 
-  // Pre-filter by campaign if URL has ?campaign=
-  const campaignId = searchParams.get("campaign");
+  useEffect(() => { load(); }, [campaignId]);
+
+  // Auto-refresh while active calls exist
+  useEffect(() => {
+    const hasActive = calls.some((c) => ACTIVE_STATUSES.has(c.status));
+    if (hasActive && !timerRef.current) {
+      timerRef.current = setInterval(() => load(true), AUTO_REFRESH_MS);
+    } else if (!hasActive && timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    };
+  }, [calls]);
 
   const filtered = calls.filter((c) => {
     const matchQ =
@@ -53,12 +79,13 @@ export default function CallResults() {
     return matchQ && matchStatus;
   });
 
+  // Stats scoped to the filtered/campaign set, not global
   const stats = {
-    total:     calls.length,
-    completed: calls.filter((c) => c.status === "completed").length,
-    voicemail: calls.filter((c) => c.status === "voicemail").length,
-    no_answer: calls.filter((c) => ["no_answer","busy","failed"].includes(c.status)).length,
-    active:    calls.filter((c) => ["connected","dialing","ringing"].includes(c.status)).length,
+    total:     filtered.length,
+    completed: filtered.filter((c) => c.status === "completed").length,
+    voicemail: filtered.filter((c) => c.status === "voicemail").length,
+    no_answer: filtered.filter((c) => ["no_answer","busy","failed"].includes(c.status)).length,
+    active:    filtered.filter((c) => ACTIVE_STATUSES.has(c.status)).length,
   };
 
   const exportCsv = () => {
@@ -74,23 +101,45 @@ export default function CallResults() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = "call-results.csv";
+    a.download = campaignId ? `campaign-${campaignId}.csv` : "call-results.csv";
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Exported " + filtered.length + " calls");
   };
 
+  const hasActive = calls.some((c) => ACTIVE_STATUSES.has(c.status));
+
   return (
     <div className="mx-auto max-w-7xl space-y-4">
 
       {/* ── Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Call Results</h2>
-          <p className="text-sm text-muted-foreground">
-            {stats.total.toLocaleString()} total calls
-            {campaignId && " · Filtered by campaign"}
-          </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          {campaignId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mt-0.5 shrink-0"
+              onClick={() => navigate("/campaigns")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">
+              {campaignName ? `${campaignName} — Results` : "Call Results"}
+            </h2>
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+              {calls.length.toLocaleString()} calls
+              {campaignId && !campaignName && " · Filtered by campaign"}
+              {hasActive && (
+                <span className="inline-flex items-center gap-1 text-primary">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  Live · auto-refreshing
+                </span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
@@ -113,7 +162,7 @@ export default function CallResults() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={load}><RefreshCw className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={() => load()}><RefreshCw className="h-4 w-4" /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -122,7 +171,11 @@ export default function CallResults() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={exportCsv}>Export CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { window.location.href = getCallsExportUrl(); toast.success("Downloading Excel…"); }}>
+              <DropdownMenuItem onClick={() => {
+                const url = campaignId ? getCampaignExportUrl(campaignId) : getCallsExportUrl();
+                window.location.href = url;
+                toast.success("Downloading Excel…");
+              }}>
                 Export Excel (with summaries)
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -158,7 +211,11 @@ export default function CallResults() {
             <PhoneOff className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium">No calls match your filters</p>
-          <p className="text-xs text-muted-foreground">Try adjusting the search or status filter.</p>
+          <p className="text-xs text-muted-foreground">
+            {campaignId
+              ? "This campaign has no calls yet, or none match the current filter."
+              : "Try adjusting the search or status filter."}
+          </p>
         </Card>
       ) : (
         <Card className="shadow-card overflow-hidden">
@@ -217,6 +274,7 @@ export default function CallResults() {
           </div>
           <div className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
             Showing {filtered.length} of {calls.length} calls
+            {q || statusFilter !== "all" ? " (filtered)" : ""}
           </div>
         </Card>
       )}

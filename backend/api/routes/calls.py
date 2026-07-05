@@ -19,7 +19,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status  # noqa: F401
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status  # noqa: F401
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ from database import (
     get_active_call,
     get_all_calls,
     get_call,
+    get_calls_by_campaign,
     get_session,
     update_call_sid,
 )
@@ -299,8 +300,12 @@ _active_router = APIRouter(prefix="/calls", tags=["calls"])
 @_active_router.get("", response_model=list[CallStatusResponse])
 async def list_all_calls(
     session: AsyncSession = Depends(get_session),
+    campaign_id: str | None = Query(None),
 ) -> list[CallStatusResponse]:
-    calls = await get_all_calls(session)
+    if campaign_id:
+        calls = await get_calls_by_campaign(session, campaign_id)
+    else:
+        calls = await get_all_calls(session)
     return [CallStatusResponse.model_validate(c) for c in calls]
 
 
