@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import AsyncIterator
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -47,6 +47,16 @@ async def init_db(database_url: str) -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # SQLite doesn't add new columns via create_all — run migrations manually
+    async with _engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE calls ADD COLUMN direction TEXT NOT NULL DEFAULT 'outbound'",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass  # column already exists
+
     logger.info("database.initialized", url=database_url)
 
 
@@ -73,6 +83,7 @@ async def create_call(
     customer_name: str,
     phone_number: str,
     livekit_room_name: str,
+    direction: str = "outbound",
 ) -> Call:
     call = Call(
         id=str(uuid.uuid4()),
@@ -80,13 +91,14 @@ async def create_call(
         phone_number=phone_number,
         status=CallStatus.PENDING,
         livekit_room_name=livekit_room_name,
+        direction=direction,
         created_at=datetime.utcnow(),
     )
-    call.append_log("call.created", {"customer_name": customer_name, "phone": phone_number})
+    call.append_log("call.created", {"customer_name": customer_name, "phone": phone_number, "direction": direction})
     session.add(call)
     await session.commit()
     await session.refresh(call)
-    logger.info("call.created", call_id=call.id, phone=phone_number)
+    logger.info("call.created", call_id=call.id, phone=phone_number, direction=direction)
     return call
 
 
@@ -105,6 +117,16 @@ async def get_call_by_sid(session: AsyncSession, sid: str) -> Call | None:
 async def get_all_calls(session: AsyncSession, limit: int = 200) -> list[Call]:
     result = await session.execute(
         select(Call).order_by(Call.created_at.desc()).limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_inbound_calls(session: AsyncSession, limit: int = 100) -> list[Call]:
+    result = await session.execute(
+        select(Call)
+        .where(Call.direction == "inbound")
+        .order_by(Call.created_at.desc())
+        .limit(limit)
     )
     return list(result.scalars().all())
 
@@ -377,3 +399,44 @@ async def set_db_setting(session: AsyncSession, key: str, value: str) -> None:
     else:
         session.add(AppSetting(key=key, value=value, updated_at=datetime.utcnow()))
     await session.commit()
+
+
+# ── Inbound config (key-value pairs prefixed inbound_) ───────────────────────
+
+_INBOUND_KEYS = [
+    "inbound_enabled",
+    "inbound_phone_number",
+    "inbound_agent_name",
+    "inbound_company_name",
+    "inbound_greeting",
+    "inbound_system_prompt",
+    "inbound_livekit_trunk_id",
+]
+
+_INBOUND_DEFAULTS: dict[str, str] = {
+    "inbound_enabled": "false",
+    "inbound_phone_number": "",
+    "inbound_agent_name": "Alex",
+    "inbound_company_name": "",
+    "inbound_greeting": "Thank you for calling {company_name}. My name is {agent_name}, how can I help you today?",
+    "inbound_system_prompt": (
+        "You are a helpful AI assistant answering inbound calls. "
+        "Be friendly, professional, and concise. "
+        "Listen carefully and help the caller with their needs."
+    ),
+    "inbound_livekit_trunk_id": "",
+}
+
+
+async def get_inbound_config(session: AsyncSession) -> dict[str, str]:
+    result = await session.execute(
+        select(AppSetting).where(AppSetting.key.in_(_INBOUND_KEYS))
+    )
+    stored = {row.key: row.value for row in result.scalars().all()}
+    return {k: stored.get(k, _INBOUND_DEFAULTS.get(k, "")) for k in _INBOUND_KEYS}
+
+
+async def save_inbound_config(session: AsyncSession, config: dict[str, str]) -> None:
+    for key in _INBOUND_KEYS:
+        if key in config:
+            await set_db_setting(session, key, config[key])

@@ -59,6 +59,9 @@ class Call(Base):
     transcript_json = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
 
+    # Direction
+    direction = Column(String(10), nullable=False, default="outbound")
+
     # Diagnostics
     error_message = Column(Text, nullable=True)
     call_logs_json = Column(Text, nullable=True)   # list of log entry dicts

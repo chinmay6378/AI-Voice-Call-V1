@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 
 from api.routes.bulk import router as bulk_router
 from api.routes.calls import router as call_router, _active_router as active_router
+from api.routes.inbound import router as inbound_router
 from api.routes.settings_routes import router as settings_router
 from api.routes.webhooks import router as webhook_router
 from config.settings import apply_db_overrides, get_settings
@@ -131,6 +132,7 @@ app.include_router(active_router)
 app.include_router(webhook_router)
 app.include_router(bulk_router)
 app.include_router(settings_router)
+app.include_router(inbound_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])

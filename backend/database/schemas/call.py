@@ -45,6 +45,7 @@ class CallStatusResponse(BaseModel):
     customer_name: str
     phone_number: str
     status: CallStatus
+    direction: str = "outbound"
     answered_by: AnsweredBy | None = None
     signalwire_call_sid: str | None = None
     livekit_room_name: str | None = None

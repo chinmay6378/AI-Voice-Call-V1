@@ -8,12 +8,17 @@ from .repository import (
     get_active_call,
     get_all_calls,
     get_calls_by_campaign,
+    get_inbound_calls,
+    get_inbound_config,
+    save_inbound_config,
     update_call_status,
     update_call_sid,
     mark_call_answered,
     mark_call_voicemail,
     append_transcript_entry,
     finalize_call,
+    get_all_db_settings,
+    set_db_setting,
 )
 
 __all__ = [
@@ -26,10 +31,15 @@ __all__ = [
     "get_active_call",
     "get_all_calls",
     "get_calls_by_campaign",
+    "get_inbound_calls",
+    "get_inbound_config",
+    "save_inbound_config",
     "update_call_status",
     "update_call_sid",
     "mark_call_answered",
     "mark_call_voicemail",
     "append_transcript_entry",
     "finalize_call",
+    "get_all_db_settings",
+    "set_db_setting",
 ]

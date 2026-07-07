@@ -15,6 +15,7 @@ import Calls from "./pages/Calls.tsx";
 import CallDetails from "./pages/CallDetails.tsx";
 import Health from "./pages/Health.tsx";
 import Settings from "./pages/Settings.tsx";
+import Inbound from "./pages/Inbound.tsx";
 import Login from "./pages/Login.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -39,6 +40,7 @@ const App = () => (
               {/* Legacy routes — kept for backward compat */}
               <Route path="/calls"          element={<Calls />} />
               <Route path="/calls/:id"      element={<CallDetails />} />
+              <Route path="/inbound"        element={<Inbound />} />
               <Route path="/health"         element={<Health />} />
               <Route path="/settings"       element={<Settings />} />
             </Route>

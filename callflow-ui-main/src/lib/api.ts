@@ -261,6 +261,41 @@ export function getCampaignExportUrl(campaignId: string): string {
   return `${API_BASE}/bulk/campaigns/${campaignId}/export`;
 }
 
+// ── Inbound call config ────────────────────────────────────────────────────────
+
+export interface InboundConfig {
+  inbound_enabled: string;
+  inbound_phone_number: string;
+  inbound_agent_name: string;
+  inbound_company_name: string;
+  inbound_greeting: string;
+  inbound_system_prompt: string;
+  inbound_livekit_trunk_id: string;
+  webhook_url: string;
+}
+
+export async function getInboundConfig(): Promise<InboundConfig> {
+  const res = await fetch(`${API_BASE}/inbound/config`);
+  if (!res.ok) throw new Error("Failed to fetch inbound config");
+  return res.json();
+}
+
+export async function saveInboundConfig(config: Partial<InboundConfig>): Promise<void> {
+  const res = await fetch(`${API_BASE}/inbound/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error("Failed to save inbound config");
+}
+
+export async function listInboundCalls(): Promise<Call[]> {
+  const res = await fetch(`${API_BASE}/inbound/calls`);
+  if (!res.ok) throw new Error("Failed to fetch inbound calls");
+  const data: BackendCall[] = await res.json();
+  return data.map(toCall);
+}
+
 export async function getHealth() {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) throw new Error("Health check failed");

@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, PhoneCall, Activity, Settings,
-  Megaphone, Rocket, Radio, BarChart3, PhoneForwarded,
+  Megaphone, Rocket, Radio, BarChart3, PhoneForwarded, PhoneIncoming,
   Building2, ChevronDown,
 } from "lucide-react";
 import {
@@ -23,9 +23,10 @@ const groups = [
   {
     label: "Operations",
     items: [
-      { title: "Live Calls",   url: "/live",      icon: Radio },
-      { title: "Call Results", url: "/results",   icon: PhoneForwarded },
-      { title: "Analytics",    url: "/analytics", icon: BarChart3 },
+      { title: "Live Calls",    url: "/live",      icon: Radio },
+      { title: "Inbound",       url: "/inbound",   icon: PhoneIncoming },
+      { title: "Call Results",  url: "/results",   icon: PhoneForwarded },
+      { title: "Analytics",     url: "/analytics", icon: BarChart3 },
     ],
   },
   {
