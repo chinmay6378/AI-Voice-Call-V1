@@ -143,7 +143,7 @@ class LiveKitRoomManager:
             result = await lk.sip.create_sip_dispatch_rule(
                 sip_proto.CreateSIPDispatchRuleRequest(
                     rule=sip_proto.SIPDispatchRule(
-                        dispatch_rule_direct_call=sip_proto.SIPDispatchRuleDirectCall(
+                        dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
                             room_name=room_name,
                         ),
                         callee_regexp=f"^{_re.escape(room_name)}$",
