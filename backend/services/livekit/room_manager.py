@@ -134,11 +134,10 @@ class LiveKitRoomManager:
 
     async def create_call_dispatch_rule(self, room_name: str) -> str:
         """
-        Create a per-call SIP dispatch rule that routes any SIP call whose
-        callee username is exactly `room_name` into that LiveKit room.
+        Create a per-call SIP dispatch rule that routes incoming SIP calls
+        into the LiveKit room where the agent is already waiting.
         Returns the dispatch rule ID (store it so you can delete it later).
         """
-        import re as _re
         async with self._get_api() as lk:
             result = await lk.sip.create_sip_dispatch_rule(
                 sip_proto.CreateSIPDispatchRuleRequest(
@@ -146,9 +145,7 @@ class LiveKitRoomManager:
                         dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
                             room_name=room_name,
                         ),
-                        callee_regexp=f"^{_re.escape(room_name)}$",
-                        name=f"auto-{room_name}",
-                    )
+                    ),
                 )
             )
         logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id)
