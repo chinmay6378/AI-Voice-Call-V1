@@ -24,7 +24,18 @@ import { cn } from "@/lib/utils";
 
 export default function Inbound() {
   const navigate  = useNavigate();
-  const [config, setConfig]     = useState<InboundConfig | null>(null);
+  const defaultConfig: InboundConfig = {
+    inbound_enabled: "false",
+    inbound_phone_number: "",
+    inbound_agent_name: "",
+    inbound_company_name: "",
+    inbound_greeting: "",
+    inbound_system_prompt: "",
+    inbound_livekit_trunk_id: "",
+    webhook_url: "",
+  };
+
+  const [config, setConfig]     = useState<InboundConfig>(defaultConfig);
   const [calls, setCalls]       = useState<Call[]>([]);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
@@ -32,13 +43,15 @@ export default function Inbound() {
   const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
-    Promise.all([getInboundConfig(), listInboundCalls()])
-      .then(([cfg, c]) => { setConfig(cfg); setCalls(c); })
+    Promise.all([
+      getInboundConfig().catch(() => defaultConfig),
+      listInboundCalls().catch(() => []),
+    ]).then(([cfg, c]) => { setConfig(cfg); setCalls(c); })
       .finally(() => setLoading(false));
   }, []);
 
   const copyWebhook = () => {
-    if (!config?.webhook_url) return;
+    if (!config.webhook_url) return;
     navigator.clipboard.writeText(config.webhook_url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -46,7 +59,6 @@ export default function Inbound() {
   };
 
   const save = async () => {
-    if (!config) return;
     setSaving(true);
     try {
       await saveInboundConfig(config);
@@ -59,9 +71,9 @@ export default function Inbound() {
   };
 
   const set = (key: keyof InboundConfig, value: string) =>
-    setConfig((prev) => prev ? { ...prev, [key]: value } : prev);
+    setConfig((prev) => ({ ...prev, [key]: value }));
 
-  const enabled = config?.inbound_enabled === "true";
+  const enabled = config.inbound_enabled === "true";
 
   if (loading) {
     return (
@@ -93,15 +105,13 @@ export default function Inbound() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {config && (
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={enabled}
-                onCheckedChange={(v) => set("inbound_enabled", v ? "true" : "false")}
-              />
-              <span className="text-sm font-medium">{enabled ? "Enabled" : "Disabled"}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={enabled}
+              onCheckedChange={(v) => set("inbound_enabled", v ? "true" : "false")}
+            />
+            <span className="text-sm font-medium">{enabled ? "Enabled" : "Disabled"}</span>
+          </div>
           <Button onClick={save} disabled={saving} size="sm">
             {saving ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
             Save
@@ -121,7 +131,7 @@ export default function Inbound() {
           <div className="flex items-center gap-2">
             <Input
               readOnly
-              value={config?.webhook_url ?? ""}
+              value={config.webhook_url}
               className="font-mono text-xs bg-muted/40"
             />
             <Button variant="outline" size="icon" onClick={copyWebhook}>
@@ -173,7 +183,7 @@ export default function Inbound() {
               <Label className="text-xs">Your Phone Number (DID)</Label>
               <Input
                 placeholder="+15551234567"
-                value={config?.inbound_phone_number ?? ""}
+                value={config.inbound_phone_number}
                 onChange={(e) => set("inbound_phone_number", e.target.value)}
                 className="font-mono text-sm"
               />
@@ -183,7 +193,7 @@ export default function Inbound() {
               <Label className="text-xs">LiveKit Inbound Trunk ID</Label>
               <Input
                 placeholder="ST_xxxxxxxxxxxxxxxx"
-                value={config?.inbound_livekit_trunk_id ?? ""}
+                value={config.inbound_livekit_trunk_id}
                 onChange={(e) => set("inbound_livekit_trunk_id", e.target.value)}
                 className="font-mono text-sm"
               />
@@ -195,14 +205,14 @@ export default function Inbound() {
             <div className="space-y-1.5">
               <Label className="text-xs">Agent Name</Label>
               <Input
-                value={config?.inbound_agent_name ?? ""}
+                value={config.inbound_agent_name}
                 onChange={(e) => set("inbound_agent_name", e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Company Name</Label>
               <Input
-                value={config?.inbound_company_name ?? ""}
+                value={config.inbound_company_name}
                 onChange={(e) => set("inbound_company_name", e.target.value)}
               />
             </div>
@@ -211,7 +221,7 @@ export default function Inbound() {
           <div className="space-y-1.5">
             <Label className="text-xs">Opening Greeting</Label>
             <Input
-              value={config?.inbound_greeting ?? ""}
+              value={config.inbound_greeting}
               onChange={(e) => set("inbound_greeting", e.target.value)}
               placeholder="Thank you for calling {company_name}. My name is {agent_name}..."
             />
@@ -224,7 +234,7 @@ export default function Inbound() {
             <Label className="text-xs">System Prompt</Label>
             <Textarea
               rows={5}
-              value={config?.inbound_system_prompt ?? ""}
+              value={config.inbound_system_prompt}
               onChange={(e) => set("inbound_system_prompt", e.target.value)}
               placeholder="You are a helpful AI assistant answering inbound calls..."
               className="resize-none text-sm"
