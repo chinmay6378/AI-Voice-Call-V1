@@ -132,6 +132,39 @@ class LiveKitRoomManager:
         )
         return participant.participant_id
 
+    async def create_call_dispatch_rule(self, room_name: str) -> str:
+        """
+        Create a per-call SIP dispatch rule that routes any SIP call whose
+        callee username is exactly `room_name` into that LiveKit room.
+        Returns the dispatch rule ID (store it so you can delete it later).
+        """
+        import re as _re
+        async with self._get_api() as lk:
+            result = await lk.sip.create_sip_dispatch_rule(
+                sip_proto.CreateSIPDispatchRuleRequest(
+                    rule=sip_proto.SIPDispatchRule(
+                        dispatch_rule_direct_call=sip_proto.SIPDispatchRuleDirectCall(
+                            room_name=room_name,
+                        ),
+                        callee_regexp=f"^{_re.escape(room_name)}$",
+                        name=f"auto-{room_name}",
+                    )
+                )
+            )
+        logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id)
+        return result.sip_dispatch_rule_id
+
+    async def delete_call_dispatch_rule(self, rule_id: str) -> None:
+        """Delete a per-call SIP dispatch rule by ID."""
+        try:
+            async with self._get_api() as lk:
+                await lk.sip.delete_sip_dispatch_rule(
+                    sip_proto.DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=rule_id)
+                )
+            logger.info("livekit.dispatch_rule_deleted", rule_id=rule_id)
+        except Exception as exc:
+            logger.warning("livekit.dispatch_rule_delete_failed", rule_id=rule_id, error=str(exc))
+
     async def delete_room(self, room_name: str) -> None:
         """Delete room and disconnect all participants."""
         try:

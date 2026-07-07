@@ -47,6 +47,7 @@ class Call(Base):
     signalwire_call_sid = Column(String(100), nullable=True, index=True)
     livekit_room_name = Column(String(100), nullable=True)
     livekit_dispatch_id = Column(String(100), nullable=True)
+    livekit_sip_rule_id = Column(String(100), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

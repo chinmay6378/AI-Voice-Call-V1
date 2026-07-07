@@ -51,6 +51,7 @@ async def init_db(database_url: str) -> None:
     async with _engine.begin() as conn:
         for stmt in [
             "ALTER TABLE calls ADD COLUMN direction TEXT NOT NULL DEFAULT 'outbound'",
+            "ALTER TABLE calls ADD COLUMN livekit_sip_rule_id TEXT",
         ]:
             try:
                 await conn.execute(text(stmt))
@@ -232,6 +233,7 @@ async def finalize_call(
     error_message: str | None = None,
     summary: str | None = None,
     dispatch_id: str | None = None,
+    duration_seconds: int | None = None,
 ) -> Call | None:
     call = await get_call(session, call_id)
     if not call:
@@ -240,7 +242,9 @@ async def finalize_call(
     now = datetime.utcnow()
     call.status = status
     call.end_time = now
-    if call.answer_time:
+    if duration_seconds is not None:
+        call.duration_seconds = duration_seconds
+    elif call.answer_time:
         call.duration_seconds = int((now - call.answer_time).total_seconds())
     if error_message:
         call.error_message = error_message

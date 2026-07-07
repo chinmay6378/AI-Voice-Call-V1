@@ -72,7 +72,20 @@ async def swml_handler(
             call.append_log("webhook.swml_received", {"call_status": call_status})
             await session.commit()
 
-        swml = build_amd_routing_swml(settings, call.livekit_room_name or call_id, call_id)
+        # Create a per-call SIP dispatch rule so LiveKit routes the bridged SIP
+        # call into the existing room where the agent is already waiting.
+        room_name = call.livekit_room_name or call_id
+        if not call.livekit_sip_rule_id and settings.livekit_sip_uri:
+            try:
+                lk = LiveKitRoomManager(settings)
+                rule_id = await lk.create_call_dispatch_rule(room_name)
+                call.livekit_sip_rule_id = rule_id
+                await session.commit()
+                logger.info("webhook.swml.dispatch_rule_created", call_id=call_id, rule_id=rule_id)
+            except Exception as exc:
+                logger.warning("webhook.swml.dispatch_rule_failed", call_id=call_id, error=str(exc))
+
+        swml = build_amd_routing_swml(settings, room_name, call_id)
         return Response(content=swml, media_type="application/json")
     except Exception as exc:
         logger.error("webhook.swml.error", call_id=call_id, error=str(exc), exc_info=True)
@@ -182,6 +195,10 @@ async def status_callback(
                     summary=summary,
                     **({"duration_seconds": duration_seconds} if duration_seconds is not None else {}),
                 )
+                # Clean up the per-call SIP dispatch rule
+                if call.livekit_sip_rule_id:
+                    lk = LiveKitRoomManager(settings)
+                    await lk.delete_call_dispatch_rule(call.livekit_sip_rule_id)
             else:
                 call.status = new_status
                 await session.commit()
