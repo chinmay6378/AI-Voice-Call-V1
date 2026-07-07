@@ -54,44 +54,29 @@ async def swml_handler(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    """
-    Called by SignalWire when the dialled number answers (or the call connects).
-    Returns a SWML document that:
-      1. Runs AMD detection synchronously.
-      2. If human → connects to LiveKit via SIP.
-      3. If machine → plays voicemail + hangs up.
+    try:
+        form = await request.form()
+        call_sid = form.get("CallSid", "")
+        call_status = form.get("CallStatus", "")
+        to_number = form.get("To", "")
 
-    Signature: SignalWire sends form-encoded POST params including CallSid,
-    CallStatus, From, To, etc.
-    """
-    form = await request.form()
-    call_sid = form.get("CallSid", "")
-    call_status = form.get("CallStatus", "")
-    to_number = form.get("To", "")
-    from_number = form.get("From", "")
+        logger.info("webhook.swml", call_id=call_id, call_sid=call_sid, call_status=call_status, to=to_number)
 
-    logger.info(
-        "webhook.swml",
-        call_id=call_id,
-        call_sid=call_sid,
-        call_status=call_status,
-        to=to_number,
-    )
+        call = await get_call(session, call_id)
+        if not call:
+            logger.warning("webhook.swml.call_not_found", call_id=call_id)
+            return Response(content=build_hangup_swml(), media_type="application/json")
 
-    call = await get_call(session, call_id)
-    if not call:
-        logger.warning("webhook.swml.call_not_found", call_id=call_id)
+        if call_sid and not call.signalwire_call_sid:
+            call.signalwire_call_sid = call_sid
+            call.append_log("webhook.swml_received", {"call_status": call_status})
+            await session.commit()
+
+        swml = build_amd_routing_swml(settings, call.livekit_room_name or call_id, call_id)
+        return Response(content=swml, media_type="application/json")
+    except Exception as exc:
+        logger.error("webhook.swml.error", call_id=call_id, error=str(exc), exc_info=True)
         return Response(content=build_hangup_swml(), media_type="application/json")
-
-    # Persist the SignalWire SID if not already stored
-    if call_sid and not call.signalwire_call_sid:
-        call.signalwire_call_sid = call_sid
-        call.append_log("webhook.swml_received", {"call_status": call_status})
-        await session.commit()
-
-    # Return AMD-aware SWML
-    swml = build_amd_routing_swml(settings, call.livekit_room_name or call_id, call_id)
-    return Response(content=swml, media_type="application/json")
 
 
 # ── AMD callback ──────────────────────────────────────────────────────────────
@@ -104,54 +89,36 @@ async def amd_callback(
     settings: Settings = Depends(get_settings),
     lk: LiveKitRoomManager = Depends(lambda s=Depends(get_settings): LiveKitRoomManager(s)),
 ) -> Response:
-    """
-    Async AMD result from SignalWire.
+    try:
+        form = await request.form()
+        answered_by = str(form.get("AnsweredBy", "unknown"))
+        call_sid = form.get("CallSid", "")
 
-    AnsweredBy values:
-      human          — real person picked up
-      machine_start  — voicemail greeting started (machine_detection=Enable)
-      machine_end_beep   — heard the beep (DetectMessageEnd)
-      machine_end_silence — silence after voicemail greeting
-      fax            — fax machine
-      unknown        — couldn't determine
+        logger.info("webhook.amd", call_id=call_id, answered_by=answered_by, call_sid=call_sid)
 
-    When our SWML uses the synchronous `detect` verb this callback is
-    still fired but the call routing has already been handled. We use it
-    to update our DB and, if needed, disconnect the customer participant
-    from the LiveKit room.
-    """
-    form = await request.form()
-    answered_by = form.get("AnsweredBy", "unknown")
-    call_sid = form.get("CallSid", "")
+        call = await get_call(session, call_id)
+        if not call:
+            logger.warning("webhook.amd.call_not_found", call_id=call_id)
+            return Response(status_code=200)
 
-    logger.info("webhook.amd", call_id=call_id, answered_by=answered_by, call_sid=call_sid)
+        call.append_log("amd.result", {"answered_by": answered_by})
+        is_machine = answered_by.startswith("machine") or answered_by == "fax"
 
-    call = await get_call(session, call_id)
-    if not call:
-        logger.warning("webhook.amd.call_not_found", call_id=call_id)
-        return Response(status_code=200)
+        if is_machine:
+            await mark_call_voicemail(session, call_id)
+            logger.info("amd.voicemail_detected", call_id=call_id, answered_by=answered_by)
+            if call.livekit_room_name:
+                try:
+                    await lk.remove_participant(call.livekit_room_name, "customer")
+                except Exception:
+                    pass
+        else:
+            await mark_call_answered(session, call_id, answered_by="human")
+            logger.info("amd.human_detected", call_id=call_id)
 
-    call.append_log("amd.result", {"answered_by": answered_by})
-
-    is_machine = answered_by.startswith("machine") or answered_by == "fax"
-
-    if is_machine:
-        # SWML detect verb already routed to voicemail section, but we update DB
-        await mark_call_voicemail(session, call_id)
-        logger.info("amd.voicemail_detected", call_id=call_id, answered_by=answered_by)
-
-        # If somehow the call got to LiveKit, kick the customer participant
-        if call.livekit_room_name:
-            try:
-                await lk.remove_participant(call.livekit_room_name, "customer")
-            except Exception:
-                pass
-    else:
-        # Human — SWML detect verb already routed to human section
-        await mark_call_answered(session, call_id, answered_by="human")
-        logger.info("amd.human_detected", call_id=call_id)
-
-    await session.commit()
+        await session.commit()
+    except Exception as exc:
+        logger.error("webhook.amd.error", call_id=call_id, error=str(exc), exc_info=True)
     return Response(status_code=200)
 
 
@@ -164,73 +131,60 @@ async def status_callback(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    """
-    SignalWire call lifecycle status updates.
+    try:
+        form = await request.form()
+        sw_status = (form.get("CallStatus") or "").lower().replace("-", "_")
+        call_sid = str(form.get("CallSid") or "")
+        duration_raw = form.get("CallDuration")
 
-    CallStatus values: initiated, ringing, in-progress, completed,
-                       busy, no-answer, failed, canceled
-    """
-    form = await request.form()
-    sw_status = (form.get("CallStatus") or "").lower().replace("-", "_")
-    call_sid = form.get("CallSid", "")
-    duration = form.get("CallDuration")
+        logger.info("webhook.status", call_id=call_id, sw_status=sw_status, call_sid=call_sid, duration=duration_raw)
 
-    logger.info(
-        "webhook.status",
-        call_id=call_id,
-        sw_status=sw_status,
-        call_sid=call_sid,
-        duration=duration,
-    )
+        call = await get_call(session, call_id)
+        if not call:
+            return Response(status_code=200)
 
-    call = await get_call(session, call_id)
-    if not call:
-        return Response(status_code=200)
+        call.append_log("signalwire.status", {"status": sw_status, "call_sid": call_sid})
 
-    call.append_log("signalwire.status", {"status": sw_status, "call_sid": call_sid})
+        _status_map = {
+            "initiated": CallStatus.DIALING,
+            "ringing": CallStatus.RINGING,
+            "in_progress": CallStatus.IN_PROGRESS,
+            "completed": CallStatus.COMPLETED,
+            "busy": CallStatus.BUSY,
+            "no_answer": CallStatus.NO_ANSWER,
+            "failed": CallStatus.FAILED,
+            "canceled": CallStatus.CANCELLED,
+        }
 
-    _status_map = {
-        "initiated": CallStatus.DIALING,
-        "ringing": CallStatus.RINGING,
-        "in_progress": CallStatus.IN_PROGRESS,
-        "completed": CallStatus.COMPLETED,
-        "busy": CallStatus.BUSY,
-        "no_answer": CallStatus.NO_ANSWER,
-        "failed": CallStatus.FAILED,
-        "canceled": CallStatus.CANCELLED,
-    }
+        new_status = _status_map.get(sw_status)
+        if new_status:
+            if new_status in (CallStatus.COMPLETED, CallStatus.BUSY, CallStatus.NO_ANSWER, CallStatus.FAILED, CallStatus.CANCELLED):
+                transcript = call.get_transcript()
+                summary: str | None = None
+                if transcript:
+                    try:
+                        groq = GroqClient(settings)
+                        summary = await groq.summarise_transcript(call.customer_name, transcript)
+                    except Exception as exc:
+                        logger.warning("summary.failed", call_id=call_id, error=str(exc))
 
-    new_status = _status_map.get(sw_status)
-    if new_status:
-        if new_status in (
-            CallStatus.COMPLETED,
-            CallStatus.BUSY,
-            CallStatus.NO_ANSWER,
-            CallStatus.FAILED,
-            CallStatus.CANCELLED,
-        ):
-            # Terminal state — generate summary if we have a transcript
-            transcript = call.get_transcript()
-            summary: str | None = None
-            if transcript:
-                try:
-                    groq = GroqClient(settings)
-                    summary = await groq.summarise_transcript(call.customer_name, transcript)
-                except Exception as exc:
-                    logger.warning("summary.failed", call_id=call_id, error=str(exc))
+                duration_seconds: int | None = None
+                if duration_raw:
+                    try:
+                        duration_seconds = int(duration_raw)
+                    except (ValueError, TypeError):
+                        logger.warning("webhook.status.bad_duration", call_id=call_id, raw=duration_raw)
 
-            extra = {}
-            if duration:
-                extra["duration_seconds"] = int(duration)
-            await finalize_call(
-                session,
-                call_id,
-                status=new_status,
-                summary=summary,
-                **extra,  # type: ignore[arg-type]
-            )
-        else:
-            call.status = new_status
-            await session.commit()
-
+                await finalize_call(
+                    session,
+                    call_id,
+                    status=new_status,
+                    summary=summary,
+                    **({"duration_seconds": duration_seconds} if duration_seconds is not None else {}),
+                )
+            else:
+                call.status = new_status
+                await session.commit()
+    except Exception as exc:
+        logger.error("webhook.status.error", call_id=call_id, error=str(exc), exc_info=True)
     return Response(status_code=200)
