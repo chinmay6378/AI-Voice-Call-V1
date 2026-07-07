@@ -63,8 +63,8 @@ export default function Inbound() {
     try {
       await saveInboundConfig(config);
       toast.success("Inbound settings saved");
-    } catch {
-      toast.error("Failed to save settings");
+    } catch (err) {
+      toast.error(`Save failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
       setSaving(false);
     }

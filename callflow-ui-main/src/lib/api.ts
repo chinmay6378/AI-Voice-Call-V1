@@ -286,7 +286,10 @@ export async function saveInboundConfig(config: Partial<InboundConfig>): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
   });
-  if (!res.ok) throw new Error("Failed to save inbound config");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail ?? `HTTP ${res.status}`);
+  }
 }
 
 export async function listInboundCalls(): Promise<Call[]> {
