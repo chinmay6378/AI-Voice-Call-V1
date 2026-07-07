@@ -35,8 +35,8 @@ from database.models.call import CallStatus
 from services.livekit.room_manager import LiveKitRoomManager
 from services.llm.groq_client import GroqClient
 from services.signalwire.swml import (
-    build_amd_routing_swml,
     build_hangup_swml,
+    build_human_only_swml,
     build_voicemail_swml,
 )
 from utils.logger import get_logger
@@ -85,7 +85,21 @@ async def swml_handler(
             except Exception as exc:
                 logger.warning("webhook.swml.dispatch_rule_failed", call_id=call_id, error=str(exc))
 
-        swml = build_amd_routing_swml(settings, room_name, call_id)
+        # SignalWire POSTs AnsweredBy when MachineDetection: DetectMessageEnd completes
+        # before fetching this SWML URL. Use that result directly — no need to re-run AMD.
+        answered_by_raw = (form.get("AnsweredBy") or "").lower()
+        is_machine = answered_by_raw.startswith("machine") or answered_by_raw == "fax"
+        logger.info(
+            "webhook.swml.answered_by",
+            call_id=call_id,
+            answered_by=answered_by_raw,
+            is_machine=is_machine,
+        )
+
+        if is_machine:
+            swml = build_voicemail_swml(settings)
+        else:
+            swml = build_human_only_swml(settings, room_name, call_id)
         return Response(content=swml, media_type="application/json")
     except Exception as exc:
         logger.error("webhook.swml.error", call_id=call_id, error=str(exc), exc_info=True)
