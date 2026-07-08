@@ -144,12 +144,12 @@ class LiveKitRoomManager:
             # With a fixed SIP username all rules match all calls, so stale
             # rules cause LiveKit to route to the wrong (empty) room.
             try:
-                existing = await lk.sip.list_sip_dispatch_rules(
+                existing = await lk.sip.list_dispatch_rule(
                     sip_proto.ListSIPDispatchRuleRequest()
                 )
                 for rule in existing.items:
                     try:
-                        await lk.sip.delete_sip_dispatch_rule(
+                        await lk.sip.delete_dispatch_rule(
                             sip_proto.DeleteSIPDispatchRuleRequest(
                                 sip_dispatch_rule_id=rule.sip_dispatch_rule_id
                             )
@@ -160,7 +160,7 @@ class LiveKitRoomManager:
             except Exception as list_exc:
                 logger.warning("livekit.dispatch_rule_list_failed", error=str(list_exc))
 
-            result = await lk.sip.create_sip_dispatch_rule(
+            result = await lk.sip.create_dispatch_rule(
                 sip_proto.CreateSIPDispatchRuleRequest(
                     rule=sip_proto.SIPDispatchRule(
                         dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
@@ -176,7 +176,7 @@ class LiveKitRoomManager:
         """Delete a per-call SIP dispatch rule by ID."""
         try:
             async with self._get_api() as lk:
-                await lk.sip.delete_sip_dispatch_rule(
+                await lk.sip.delete_dispatch_rule(
                     sip_proto.DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=rule_id)
                 )
             logger.info("livekit.dispatch_rule_deleted", rule_id=rule_id)
