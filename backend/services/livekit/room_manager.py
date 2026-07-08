@@ -136,9 +136,30 @@ class LiveKitRoomManager:
         """
         Create a per-call SIP dispatch rule that routes incoming SIP calls
         into the LiveKit room where the agent is already waiting.
+        Cleans up stale rules first so only one rule exists at a time.
         Returns the dispatch rule ID (store it so you can delete it later).
         """
         async with self._get_api() as lk:
+            # Delete any leftover rules from previous crashed/failed calls.
+            # With a fixed SIP username all rules match all calls, so stale
+            # rules cause LiveKit to route to the wrong (empty) room.
+            try:
+                existing = await lk.sip.list_sip_dispatch_rules(
+                    sip_proto.ListSIPDispatchRuleRequest()
+                )
+                for rule in existing.items:
+                    try:
+                        await lk.sip.delete_sip_dispatch_rule(
+                            sip_proto.DeleteSIPDispatchRuleRequest(
+                                sip_dispatch_rule_id=rule.sip_dispatch_rule_id
+                            )
+                        )
+                        logger.info("livekit.dispatch_rule_stale_deleted", rule_id=rule.sip_dispatch_rule_id)
+                    except Exception as del_exc:
+                        logger.warning("livekit.dispatch_rule_stale_delete_failed", rule_id=rule.sip_dispatch_rule_id, error=str(del_exc))
+            except Exception as list_exc:
+                logger.warning("livekit.dispatch_rule_list_failed", error=str(list_exc))
+
             result = await lk.sip.create_sip_dispatch_rule(
                 sip_proto.CreateSIPDispatchRuleRequest(
                     rule=sip_proto.SIPDispatchRule(

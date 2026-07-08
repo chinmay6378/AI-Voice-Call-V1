@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     livekit_api_secret: str
     livekit_sip_uri: str = ""          # Inbound SIP URI, e.g. "sip.livekit.cloud"
     livekit_sip_trunk_id: str = ""     # SIP trunk configured in LiveKit dashboard
+    livekit_sip_username: str = ""     # "Number" registered in LiveKit inbound trunk (e.g. "+10000000001")
 
     # ── Deepgram ─────────────────────────────────────────────────────────────
     deepgram_api_key: str

@@ -157,13 +157,18 @@ def build_hangup_swml() -> str:
 
 def _build_sip_uri(settings: Settings, room_name: str) -> str:
     """
-    Build the SIP URI that will route the call into a LiveKit room.
-    Strips any leading 'sip:' prefix from livekit_sip_uri so the setting
-    accepts either '1kuzit7spsm.sip.livekit.cloud' or
-    'sip:1kuzit7spsm.sip.livekit.cloud'.
+    Build the SIP URI for the LiveKit inbound SIP trunk.
+
+    The username must match a "Number" registered in the LiveKit trunk's
+    Numbers field — LiveKit matches the SIP INVITE To: header against that
+    list and rejects calls that don't match.  Set LIVEKIT_SIP_USERNAME to
+    the same value you added in the LiveKit dashboard (e.g. "+10000000001").
+    Falls back to the room name if unset (only works if the trunk has a
+    matching wildcard entry).
     """
     raw = settings.livekit_sip_uri or "sip.livekit.example.com"
     sip_host = raw.removeprefix("sip:").strip()
-    uri = f"sip:{room_name}@{sip_host}"
-    logger.info("swml.sip_uri", uri=uri, room=room_name)
+    username = settings.livekit_sip_username.strip() if settings.livekit_sip_username else room_name
+    uri = f"sip:{username}@{sip_host}"
+    logger.info("swml.sip_uri", uri=uri, room=room_name, username=username)
     return uri
