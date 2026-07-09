@@ -23,6 +23,8 @@ ALLOWED_KEYS = {
     "livekit_api_secret",
     "livekit_sip_trunk_id",
     "livekit_sip_uri",
+    "livekit_sip_username",
+    "livekit_inbound_sip_trunk_id",
     "signalwire_project_id",
     "signalwire_api_token",
     "signalwire_space_url",
