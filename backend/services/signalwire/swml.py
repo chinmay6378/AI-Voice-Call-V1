@@ -116,10 +116,6 @@ def build_human_only_swml(
                         "from": settings.signalwire_from_number,
                         "to": sip_destination,
                         "timeout": 30,
-                        "headers": {
-                            "X-Call-ID": call_id,
-                            "X-Room-Name": room_name,
-                        },
                     }
                 }
             ]

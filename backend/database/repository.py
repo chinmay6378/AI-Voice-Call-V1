@@ -145,7 +145,7 @@ async def get_calls_by_campaign(session: AsyncSession, campaign_id: str) -> list
 
 async def get_active_call(session: AsyncSession) -> Call | None:
     """Return the current in-progress call, if any."""
-    active_statuses = [CallStatus.DIALING, CallStatus.RINGING, CallStatus.IN_PROGRESS]
+    active_statuses = [CallStatus.PENDING, CallStatus.DIALING, CallStatus.RINGING, CallStatus.IN_PROGRESS]
     result = await session.execute(
         select(Call)
         .where(Call.status.in_(active_statuses))
