@@ -165,6 +165,6 @@ def _build_sip_uri(settings: Settings, room_name: str) -> str:
     raw = settings.livekit_sip_uri or "sip.livekit.example.com"
     sip_host = raw.removeprefix("sip:").strip()
     username = settings.livekit_sip_username.strip() if settings.livekit_sip_username else room_name
-    uri = f"sip:{username}@{sip_host}"
+    uri = f"sips:{username}@{sip_host}"
     logger.info("swml.sip_uri", uri=uri, room=room_name, username=username)
     return uri
