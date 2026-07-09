@@ -160,6 +160,11 @@ class LiveKitRoomManager:
             except Exception as list_exc:
                 logger.warning("livekit.dispatch_rule_list_failed", error=str(list_exc))
 
+            # No trunk_ids filter — matching all trunks is required.
+            # With trunk_ids set, LiveKit rejects in ~2s because it can't
+            # attribute the incoming SignalWire SIP INVITE to that specific
+            # trunk ID. Without the filter, LiveKit finds the rule and
+            # processes the INVITE into the room (4-5s path, closer to working).
             req = sip_proto.CreateSIPDispatchRuleRequest(
                 rule=sip_proto.SIPDispatchRule(
                     dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
@@ -167,10 +172,8 @@ class LiveKitRoomManager:
                     ),
                 ),
             )
-            if inbound_trunk_id:
-                req.trunk_ids.append(inbound_trunk_id)
             result = await lk.sip.create_dispatch_rule(req)
-        logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id, trunk_id=inbound_trunk_id or "all")
+        logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id)
         return result.sip_dispatch_rule_id
 
     async def create_inbound_dispatch_rule(self) -> str:

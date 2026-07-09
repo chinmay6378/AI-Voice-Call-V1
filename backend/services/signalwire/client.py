@@ -62,17 +62,10 @@ class SignalWireClient:
             from_=self._settings.signalwire_from_number,
             url=swml_webhook_url,
             method="POST",
-            # Use Enable (not DetectMessageEnd) so SignalWire fires the SWML webhook
-            # immediately on answer instead of waiting up to 30 s for AMD to time out.
-            # DetectMessageEnd classifies human calls as machine_end_other and then waits
-            # the full timeout before posting SWML — the agent never gets connected.
-            # With Enable the SWML fires at ~0 s, the SIP bridge to LiveKit is set up
-            # right away, and the agent's in-band STT-based AMD (_VOICEMAIL_PHRASES /
-            # _IVR_PHRASES in agent.py) handles real voicemail detection accurately.
-            machine_detection="Enable",
-            machine_detection_timeout=self._settings.amd_timeout_seconds,
-            async_amd_status_callback=amd_callback_url,
-            async_amd_status_callback_method="POST",
+            # No AMD — the agent's in-band STT (_VOICEMAIL_PHRASES / _IVR_PHRASES)
+            # handles machine detection after the SIP bridge is established.
+            # SignalWire AMD caused false-positive machine_start/machine_end_other
+            # results that prevented the call from connecting to LiveKit.
             # Status lifecycle callbacks
             status_callback=status_callback_url,
             status_callback_method="POST",
