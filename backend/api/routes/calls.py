@@ -168,6 +168,19 @@ async def start_call(
             detail=f"Failed to dispatch agent: {exc}",
         )
 
+    # 4.5. Pre-create SIP dispatch rule BEFORE dialing so it's active when AMD
+    # completes (~6s later) and SignalWire sends the SIP INVITE to LiveKit.
+    # Creating it here (not in the SWML webhook) gives LiveKit's routing layer
+    # time to propagate the rule before the INVITE arrives.
+    if settings.livekit_sip_uri and (settings.telephony_provider or "livekit_sip").lower() == "signalwire":
+        try:
+            rule_id = await lk.create_call_dispatch_rule(room_name)
+            call.livekit_sip_rule_id = rule_id
+            await session.commit()
+            logger.info("call.dispatch_rule_created", call_id=call.id, rule_id=rule_id, room=room_name)
+        except Exception as exc:
+            logger.warning("call.dispatch_rule_create_failed", call_id=call.id, error=str(exc))
+
     # 5. Dial customer — branch on configured telephony provider
     provider = (settings.telephony_provider or "livekit_sip").lower()
 
