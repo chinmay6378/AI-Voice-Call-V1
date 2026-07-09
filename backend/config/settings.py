@@ -32,9 +32,10 @@ class Settings(BaseSettings):
     livekit_url: str                   # e.g. "wss://myproject.livekit.cloud"
     livekit_api_key: str
     livekit_api_secret: str
-    livekit_sip_uri: str = ""          # Inbound SIP URI, e.g. "sip.livekit.cloud"
-    livekit_sip_trunk_id: str = ""     # SIP trunk configured in LiveKit dashboard
-    livekit_sip_username: str = ""     # "Number" registered in LiveKit inbound trunk (e.g. "+10000000001")
+    livekit_sip_uri: str = ""               # Inbound SIP URI, e.g. "sip.livekit.cloud"
+    livekit_sip_trunk_id: str = ""          # Outbound SIP trunk ID (LiveKit → carrier)
+    livekit_inbound_sip_trunk_id: str = ""  # Inbound SIP trunk ID (carrier → LiveKit), e.g. "ST_a8Gf2xHxzGAX"
+    livekit_sip_username: str = ""          # SIP username used in SWML connect To: header
 
     # ── Deepgram ─────────────────────────────────────────────────────────────
     deepgram_api_key: str

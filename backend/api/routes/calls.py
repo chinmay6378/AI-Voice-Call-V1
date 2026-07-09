@@ -174,7 +174,7 @@ async def start_call(
     # time to propagate the rule before the INVITE arrives.
     if settings.livekit_sip_uri and (settings.telephony_provider or "livekit_sip").lower() == "signalwire":
         try:
-            rule_id = await lk.create_call_dispatch_rule(room_name)
+            rule_id = await lk.create_call_dispatch_rule(room_name, inbound_trunk_id=settings.livekit_inbound_sip_trunk_id)
             call.livekit_sip_rule_id = rule_id
             await session.commit()
             logger.info("call.dispatch_rule_created", call_id=call.id, rule_id=rule_id, room=room_name)

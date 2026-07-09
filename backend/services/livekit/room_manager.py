@@ -132,7 +132,7 @@ class LiveKitRoomManager:
         )
         return participant.participant_id
 
-    async def create_call_dispatch_rule(self, room_name: str) -> str:
+    async def create_call_dispatch_rule(self, room_name: str, *, inbound_trunk_id: str = "") -> str:
         """
         Create a per-call SIP dispatch rule that routes incoming SIP calls
         into the LiveKit room where the agent is already waiting.
@@ -160,16 +160,17 @@ class LiveKitRoomManager:
             except Exception as list_exc:
                 logger.warning("livekit.dispatch_rule_list_failed", error=str(list_exc))
 
-            result = await lk.sip.create_dispatch_rule(
-                sip_proto.CreateSIPDispatchRuleRequest(
-                    rule=sip_proto.SIPDispatchRule(
-                        dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
-                            room_name=room_name,
-                        ),
+            req = sip_proto.CreateSIPDispatchRuleRequest(
+                rule=sip_proto.SIPDispatchRule(
+                    dispatch_rule_direct=sip_proto.SIPDispatchRuleDirect(
+                        room_name=room_name,
                     ),
-                )
+                ),
             )
-        logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id)
+            if inbound_trunk_id:
+                req.trunk_ids.append(inbound_trunk_id)
+            result = await lk.sip.create_dispatch_rule(req)
+        logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id, trunk_id=inbound_trunk_id or "all")
         return result.sip_dispatch_rule_id
 
     async def create_inbound_dispatch_rule(self) -> str:
