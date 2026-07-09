@@ -62,9 +62,20 @@ class SignalWireClient:
             from_=self._settings.signalwire_from_number,
             url=swml_webhook_url,
             method="POST",
-            # Async AMD — callback fires separately, call continues normally
+            # AMD: wait for end of machine greeting (best for voicemail drop).
+            # Tuned to reduce false-positive machine detection on live humans:
+            #   speech_threshold=4500  — analyze up to 4.5s of initial speech before deciding
+            #                            (default ~3400ms is too short; a brief "Hello?" can
+            #                             trigger machine_end_other at the default threshold)
+            #   speech_end_threshold=1200 — require 1.2s of silence AFTER speech ends before
+            #                               committing to a classification (humans pause & resume)
+            #   silence_timeout=8000   — wait up to 8s for speech to start (some recipients
+            #                            hesitate before speaking)
             machine_detection="DetectMessageEnd",
             machine_detection_timeout=self._settings.amd_timeout_seconds,
+            machine_detection_speech_threshold=4500,
+            machine_detection_speech_end_threshold=1200,
+            machine_detection_silence_timeout=8000,
             async_amd_status_callback=amd_callback_url,
             async_amd_status_callback_method="POST",
             # Status lifecycle callbacks

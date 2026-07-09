@@ -82,7 +82,10 @@ async def swml_handler(
         if not call.livekit_sip_rule_id and settings.livekit_sip_uri:
             try:
                 lk = LiveKitRoomManager(settings)
-                rule_id = await lk.create_call_dispatch_rule(room_name)
+                rule_id = await lk.create_call_dispatch_rule(
+                    room_name,
+                    inbound_trunk_id=settings.livekit_inbound_sip_trunk_id,
+                )
                 call.livekit_sip_rule_id = rule_id
                 await session.commit()
                 logger.info("webhook.swml.dispatch_rule_created", call_id=call_id, rule_id=rule_id)
