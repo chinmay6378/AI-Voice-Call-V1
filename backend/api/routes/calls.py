@@ -330,6 +330,44 @@ async def get_active(session: AsyncSession = Depends(get_session)) -> CallStatus
     return CallStatusResponse.model_validate(call)
 
 
+# ── POST /call/inbound/setup ──────────────────────────────────────────────────
+
+@router.post("/inbound/setup", status_code=status.HTTP_200_OK)
+async def setup_inbound(
+    settings: Annotated[Settings, Depends(get_settings)],
+    lk: Annotated[LiveKitRoomManager, Depends(get_livekit)],
+) -> dict:
+    """
+    One-time setup: (re)create the permanent inbound SIP dispatch rule in LiveKit.
+
+    This rule uses Individual routing (one room per caller, prefix 'inbound-')
+    and auto-dispatches the voice-call-agent so no explicit dispatch is needed
+    when an inbound call arrives.
+
+    Run this once after deploying, or again if you need to reset the rule.
+    The rule persists across restarts — no need to call this on every boot.
+
+    Prerequisites (do these in the LiveKit dashboard before calling this):
+      1. SIP → Inbound Trunks → edit trunk → clear the Numbers field (accept all)
+      2. Delete any manually-created dispatch rules so there are no conflicts
+    """
+    try:
+        rule_id = await lk.create_inbound_dispatch_rule()
+        return {
+            "rule_id": rule_id,
+            "message": "Inbound dispatch rule created. Configure SignalWire phone number webhooks as follows:",
+            "signalwire_config": {
+                "swml_webhook": f"{settings.app_base_url.rstrip('/')}/webhooks/inbound/swml",
+                "status_callback": f"{settings.app_base_url.rstrip('/')}/webhooks/inbound/status",
+            },
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to create inbound dispatch rule: {exc}",
+        )
+
+
 @_active_router.get("/export")
 async def export_all_calls_excel(session: AsyncSession = Depends(get_session)) -> StreamingResponse:
     """Download all call records as a formatted Excel file with AI summaries."""

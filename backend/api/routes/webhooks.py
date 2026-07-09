@@ -18,11 +18,15 @@ SWML endpoints return application/json; others return plain 200.
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Form, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings, get_settings
 from database import (
+    create_call,
     finalize_call,
     get_call,
     get_call_by_sid,
@@ -218,4 +222,130 @@ async def status_callback(
                 await session.commit()
     except Exception as exc:
         logger.error("webhook.status.error", call_id=call_id, error=str(exc), exc_info=True)
+    return Response(status_code=200)
+
+
+# ── Inbound call webhooks ─────────────────────────────────────────────────────
+
+@router.post("/inbound/swml")
+async def inbound_swml_handler(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """
+    Called by SignalWire when someone dials the inbound number.
+    Creates a call record for tracking and returns SWML that bridges
+    the call into LiveKit via SIP.  The permanent Individual dispatch
+    rule (created via POST /call/inbound/setup) handles room creation
+    and auto-dispatches the agent — no explicit dispatch needed here.
+    """
+    try:
+        form = await request.form()
+        from_number = str(form.get("From") or "Unknown")
+        call_sid = str(form.get("CallSid") or "")
+
+        logger.info("webhook.inbound.swml", from_number=from_number, call_sid=call_sid)
+
+        # Predict the room LiveKit will create: inbound-<caller-number>
+        room_name = f"inbound-{from_number}"
+
+        call = await create_call(
+            session,
+            customer_name=from_number,
+            phone_number=from_number,
+            livekit_room_name=room_name,
+            direction="inbound",
+        )
+        if call_sid:
+            call.signalwire_call_sid = call_sid
+            call.status = CallStatus.IN_PROGRESS
+            call.answer_time = datetime.utcnow()
+            call.append_log("inbound.call_connected", {"from": from_number})
+            await session.commit()
+
+        # Bridge call into LiveKit via SIP.
+        # Use username "inbound" (not a phone number) so SignalWire routes
+        # it externally.  The LiveKit trunk must have Numbers cleared so it
+        # accepts any SIP username.
+        raw = settings.livekit_sip_uri or ""
+        sip_host = raw.removeprefix("sip:").removeprefix("sips:").strip()
+        swml = {
+            "version": "1.0.0",
+            "sections": {
+                "main": [{
+                    "connect": {
+                        "to": f"sip:inbound@{sip_host}",
+                        "timeout": 30,
+                    }
+                }]
+            },
+        }
+        return Response(content=json.dumps(swml), media_type="application/json")
+    except Exception as exc:
+        logger.error("webhook.inbound.swml.error", error=str(exc), exc_info=True)
+        return Response(content=build_hangup_swml(), media_type="application/json")
+
+
+@router.post("/inbound/status")
+async def inbound_status_handler(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """
+    SignalWire status callback for inbound calls.
+    Looks up the call by SID (not call_id) since we don't know call_id
+    when configuring the phone number's status callback URL in SignalWire.
+    Configure SignalWire phone number status callback to:
+      <APP_BASE_URL>/webhooks/inbound/status
+    """
+    try:
+        form = await request.form()
+        call_sid = str(form.get("CallSid") or "")
+        sw_status = (form.get("CallStatus") or "").lower().replace("-", "_")
+        duration_raw = form.get("CallDuration")
+
+        logger.info("webhook.inbound.status", call_sid=call_sid, sw_status=sw_status)
+
+        call = await get_call_by_sid(session, call_sid)
+        if not call:
+            return Response(status_code=200)
+
+        call.append_log("signalwire.inbound.status", {"status": sw_status})
+
+        terminal_map = {
+            "completed": CallStatus.COMPLETED,
+            "busy": CallStatus.BUSY,
+            "no_answer": CallStatus.NO_ANSWER,
+            "failed": CallStatus.FAILED,
+            "canceled": CallStatus.CANCELLED,
+        }
+        new_status = terminal_map.get(sw_status)
+        if new_status:
+            duration_seconds: int | None = None
+            if duration_raw:
+                try:
+                    duration_seconds = int(duration_raw)
+                except (ValueError, TypeError):
+                    pass
+
+            transcript = call.get_transcript()
+            summary: str | None = None
+            if transcript:
+                try:
+                    groq = GroqClient(settings)
+                    summary = await groq.summarise_transcript(call.customer_name, transcript)
+                except Exception as exc:
+                    logger.warning("inbound.summary.failed", call_id=call.id, error=str(exc))
+
+            await finalize_call(
+                session,
+                call.id,
+                status=new_status,
+                summary=summary,
+                **({"duration_seconds": duration_seconds} if duration_seconds is not None else {}),
+            )
+    except Exception as exc:
+        logger.error("webhook.inbound.status.error", error=str(exc), exc_info=True)
     return Response(status_code=200)
