@@ -295,6 +295,12 @@ async def entrypoint(ctx: JobContext) -> None:
     call_id = metadata.get("call_id", "unknown")
     customer_name = metadata.get("customer_name", "Customer")
     phone_number = metadata.get("phone_number", "unknown")
+    # call_id is only "unknown" for calls LiveKit auto-dispatched via a
+    # dispatch rule (i.e. a genuine inbound call) — our own dispatch_agent()
+    # always attaches real metadata for outbound calls. Captured before the
+    # inbound branch below reassigns call_id, since that check needs to know
+    # what this call originally was.
+    is_inbound_call = call_id == "unknown"
 
     logger.info(
         "agent.job_started",
@@ -329,7 +335,15 @@ async def entrypoint(ctx: JobContext) -> None:
     # problem via the documented "sip.callStatus" participant attribute
     # (livekit.agents.voice.amd.detector), which only flips to "active" once
     # the call is genuinely answered — wait for that before proceeding.
-    if customer_participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+    #
+    # This only applies to OUTBOUND calls. LiveKit's own AMD module docstring
+    # says as much ("Detects whether an outbound call is answered..."). For
+    # inbound calls the caller is already on the line waiting for us to
+    # answer — nothing ever drives sip.callStatus to "active" on its own, so
+    # waiting for it here just rings the caller out to a 45s timeout with the
+    # agent silently stuck (confirmed live: customer_joined fired instantly,
+    # then 44s of silence before the caller hung up).
+    if not is_inbound_call and customer_participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
         try:
             await asyncio.wait_for(
                 wait_for_participant_attribute(
