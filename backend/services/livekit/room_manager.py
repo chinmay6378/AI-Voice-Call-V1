@@ -108,6 +108,12 @@ class LiveKitRoomManager:
         passed alongside it as the caller-ID number to present, not a substitute
         for the trunk.
 
+        wait_until_answered=True blocks this call until the phone is genuinely
+        answered (or busy/fails) — with False, the SIP participant appeared in
+        the room the instant dialing started (not when answered), so the agent
+        greeted calls nobody had picked up yet. Caller (calls.py) must run this
+        in a background task since it can now take as long as the phone rings.
+
         Returns the participant SID.
         """
         sip_trunk_id = self._settings.livekit_sip_trunk_id
@@ -125,7 +131,7 @@ class LiveKitRoomManager:
             participant_identity="customer",
             participant_name=customer_name,
             participant_metadata=json.dumps({"call_id": call_id}),
-            wait_until_answered=False,   # non-blocking; AMD handled by SWML
+            wait_until_answered=True,
         )
         if sip_number:
             request_kwargs["sip_number"] = sip_number

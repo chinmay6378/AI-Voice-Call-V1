@@ -11,6 +11,7 @@ GET   /health                 — Health check
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import uuid
 from typing import Annotated
@@ -207,29 +208,66 @@ async def start_call(
                 detail=f"Failed to initiate call via SignalWire: {exc}",
             )
     else:
-        # LiveKit SIP — dials directly via Vobiz SIP trunk
-        try:
-            participant_id = await lk.create_sip_participant(
+        # LiveKit SIP — dials directly via the configured trunk/hosted number.
+        # create_sip_participant() sets wait_until_answered=True, so it blocks
+        # until the phone is genuinely answered (or the dial fails/times out) —
+        # that used to be skipped, which let the agent greet a call nobody had
+        # picked up yet. Run it in the background so /call/start still returns
+        # call_id immediately per its documented contract, instead of the
+        # request hanging for as long as the phone rings.
+        asyncio.create_task(
+            _dial_livekit_sip_background(
+                lk,
                 room_name,
+                call_id=call.id,
                 phone_number=body.phone_number,
                 customer_name=body.customer_name,
-                call_id=call.id,
             )
-            await update_call_sid(session, call.id, participant_id)
-            logger.info("call.initiated_livekit_sip", call_id=call.id, participant_id=participant_id, to=body.phone_number)
-        except Exception as exc:
-            logger.error("livekit.sip_call_failed", call_id=call.id, error=str(exc))
-            await finalize_call(session, call.id, status=CallStatus.FAILED, error_message=str(exc))
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to initiate call via LiveKit SIP: {exc}",
-            )
+        )
+        logger.info("call.livekit_sip_dial_started", call_id=call.id, to=body.phone_number)
 
     return CallStartedResponse(
         call_id=call.id,
         status=CallStatus.DIALING,
         message=f"Outbound call to {body.phone_number} initiated via {provider}. call_id={call.id}",
     )
+
+
+async def _dial_livekit_sip_background(
+    lk: LiveKitRoomManager,
+    room_name: str,
+    *,
+    call_id: str,
+    phone_number: str,
+    customer_name: str,
+) -> None:
+    """
+    Runs the SIP dial outside the request/response cycle since it now blocks
+    until the call is answered, busy, or fails (wait_until_answered=True).
+    Uses its own DB session since the request-scoped one is closed by the
+    time this runs.
+    """
+    try:
+        participant_id = await lk.create_sip_participant(
+            room_name,
+            phone_number=phone_number,
+            customer_name=customer_name,
+            call_id=call_id,
+        )
+        async for session in get_session():
+            await update_call_sid(session, call_id, participant_id)
+            break
+        logger.info(
+            "call.initiated_livekit_sip",
+            call_id=call_id,
+            participant_id=participant_id,
+            to=phone_number,
+        )
+    except Exception as exc:
+        logger.error("livekit.sip_call_failed", call_id=call_id, error=str(exc))
+        async for session in get_session():
+            await finalize_call(session, call_id, status=CallStatus.FAILED, error_message=str(exc))
+            break
 
 
 # ── POST /call/end/{call_id} ──────────────────────────────────────────────────
