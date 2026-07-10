@@ -14,6 +14,7 @@ import json
 from typing import Any
 
 from livekit import api as lk_api
+from livekit.protocol import agent_dispatch as agent_dispatch_proto
 from livekit.protocol import room as room_proto
 from livekit.protocol import sip as sip_proto
 
@@ -227,9 +228,11 @@ class LiveKitRoomManager:
                         ),
                     ),
                     name="inbound-calls",
-                    agents=[
-                        sip_proto.SIPDispatchRuleAgent(agent_name="voice-call-agent")
-                    ],
+                    room_config=room_proto.RoomConfiguration(
+                        agents=[
+                            agent_dispatch_proto.RoomAgentDispatch(agent_name="voice-call-agent")
+                        ]
+                    ),
                 )
             )
         logger.info("livekit.inbound_dispatch_rule_created", rule_id=result.sip_dispatch_rule_id)
