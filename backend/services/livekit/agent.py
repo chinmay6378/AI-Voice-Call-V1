@@ -341,6 +341,7 @@ async def entrypoint(ctx: JobContext) -> None:
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
     agent: VoiceCallAgent | None = None
+    session_error: str | None = None
     try:
         session = AgentSession(
             stt=deepgram.STT(
@@ -391,9 +392,18 @@ async def entrypoint(ctx: JobContext) -> None:
             "I'm sorry, we've reached our time limit. Thank you for your time. Goodbye!"
         )
         await asyncio.sleep(2)
+    except Exception as exc:
+        # STT/LLM/TTS setup or session.start() failures (bad API key, provider
+        # outage, etc.) used to propagate uncaught, and the call still got
+        # marked COMPLETED below since end_status defaults to COMPLETED —
+        # masking real failures as successful calls. Mark it FAILED instead.
+        logger.error("agent.session_crashed", call_id=call_id, error=str(exc), exc_info=True)
+        session_error = str(exc)
     finally:
         logger.info("agent.session_ended", call_id=call_id)
         end_status = agent._call_end_status if agent else CallStatus.COMPLETED
+        if session_error is not None:
+            end_status = CallStatus.FAILED
 
         # Map SIP disconnect reason to call status when the agent didn't initiate hangup.
         # Read reason directly from participant (SDK sets it before firing the event, so it's
@@ -423,7 +433,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 end_status = CallStatus.FAILED
                 logger.info("call.status_from_sip", call_id=call_id, reason=sip_reason, mapped="failed")
 
-        await _end_call_db(call_id, end_status)
+        await _end_call_db(call_id, end_status, error_message=session_error)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -471,7 +481,9 @@ async def _mark_in_progress(call_id: str) -> None:
         logger.error("call.mark_in_progress_failed", call_id=call_id, error=str(exc))
 
 
-async def _end_call_db(call_id: str, status: CallStatus) -> None:
+async def _end_call_db(
+    call_id: str, status: CallStatus, *, error_message: str | None = None
+) -> None:
     try:
         async for session in get_session():
             # Generate AI summary from transcript before finalising
@@ -488,7 +500,9 @@ async def _end_call_db(call_id: str, status: CallStatus) -> None:
             except Exception as exc:
                 logger.error("call.summary_failed", call_id=call_id, error=str(exc))
 
-            await finalize_call(session, call_id, status=status, summary=summary)
+            await finalize_call(
+                session, call_id, status=status, summary=summary, error_message=error_message
+            )
             break
     except Exception as exc:
         logger.error("call.finalize_failed", call_id=call_id, error=str(exc))

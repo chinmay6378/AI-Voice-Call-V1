@@ -183,6 +183,7 @@ async def start_call(
 
     # 5. Dial customer — branch on configured telephony provider
     provider = (settings.telephony_provider or "livekit_sip").lower()
+    logger.info("call.telephony_provider_selected", call_id=call.id, provider=provider)
 
     if provider == "signalwire":
         # SignalWire dials the number; on answer it hits /webhooks/swml/{call_id}

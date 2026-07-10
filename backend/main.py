@@ -85,6 +85,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("agent_worker.started", pid=_agent_proc.pid)
         else:
             logger.warning("agent_worker.not_found", path=agent_module)
+    else:
+        logger.warning(
+            "agent_worker.auto_start_disabled",
+            message=(
+                "AUTO_START_AGENT=false — this process will NOT run the LiveKit "
+                "agent worker. If `python -m services.livekit.agent start` isn't "
+                "running in another process, calls will connect but no agent will "
+                "ever join the room, and the customer will hear silence."
+            ),
+        )
 
     resume_running_campaigns(get_settings())
     logger.info("app.ready", host=settings.app_host, port=settings.app_port)
@@ -165,6 +175,18 @@ async def health() -> HealthResponse:
         svc("ElevenLabs", "Text-to-speech synthesis", bool(settings.elevenlabs_api_key)),
         svc("Vobiz SIP Trunk", "Indian telephony SIP trunk", bool(settings.livekit_sip_trunk_id)),
     ]
+
+    if _agent_proc is not None:
+        worker_status = "healthy" if _agent_proc.poll() is None else "crashed"
+    else:
+        worker_status = "external (AUTO_START_AGENT=false — verify it's running yourself)"
+    services.append(
+        ServiceStatus(
+            name="LiveKit Agent Worker",
+            description="Joins rooms and runs the STT/LLM/TTS pipeline for each call",
+            status=worker_status,
+        )
+    )
 
     return HealthResponse(active_calls=active_count, services=services)
 
