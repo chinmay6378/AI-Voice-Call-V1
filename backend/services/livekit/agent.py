@@ -33,6 +33,7 @@ from livekit.agents import (
     llm,
 )
 from livekit.plugins import deepgram, elevenlabs, openai as lk_openai
+from livekit.agents.utils.participant import wait_for_participant_attribute
 
 from config.settings import get_settings
 from database.repository import (
@@ -320,6 +321,31 @@ async def entrypoint(ctx: JobContext) -> None:
         call_id=call_id,
         identity=customer_participant.identity,
     )
+
+    # A SIP participant object appears in the room the instant LiveKit starts
+    # dialing (representing the ringing/dialing leg) — NOT when the phone is
+    # actually picked up. Greeting at this point means talking into a call
+    # nobody has answered yet. LiveKit's own AMD module solves this exact
+    # problem via the documented "sip.callStatus" participant attribute
+    # (livekit.agents.voice.amd.detector), which only flips to "active" once
+    # the call is genuinely answered — wait for that before proceeding.
+    if customer_participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+        try:
+            await asyncio.wait_for(
+                wait_for_participant_attribute(
+                    ctx.room,
+                    identity=customer_participant.identity,
+                    attribute="sip.callStatus",
+                    value="active",
+                ),
+                timeout=45.0,
+            )
+            logger.info("agent.sip_call_active", call_id=call_id)
+        except (RuntimeError, asyncio.TimeoutError) as exc:
+            logger.warning("agent.sip_never_answered", call_id=call_id, error=str(exc))
+            if call_id != "unknown":
+                await _end_call_db(call_id, CallStatus.NO_ANSWER)
+            return
 
     # True inbound calls (dialed straight into a LiveKit-hosted number, routed
     # here by a LiveKit dispatch rule) carry no dispatch metadata — call_id is
