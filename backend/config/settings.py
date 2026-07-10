@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     livekit_sip_trunk_id: str = ""          # Outbound SIP trunk ID (LiveKit → carrier)
     livekit_inbound_sip_trunk_id: str = ""  # Inbound SIP trunk ID (carrier → LiveKit), e.g. "ST_a8Gf2xHxzGAX"
     livekit_sip_username: str = ""          # SIP username used in SWML connect To: header
+    livekit_sip_number: str = ""            # Hosted LiveKit phone number to dial FROM (bypasses sip_trunk_id)
 
     # ── Deepgram ─────────────────────────────────────────────────────────────
     deepgram_api_key: str

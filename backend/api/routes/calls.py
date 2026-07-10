@@ -74,8 +74,8 @@ def _check_credentials(settings: Settings) -> None:
 
     provider = (settings.telephony_provider or "livekit_sip").lower()
     if provider == "livekit_sip":
-        if not settings.livekit_sip_trunk_id:
-            missing.append("LiveKit SIP Trunk ID (for Vobiz)")
+        if not settings.livekit_sip_trunk_id and not settings.livekit_sip_number:
+            missing.append("LiveKit SIP Trunk ID or LiveKit SIP Number")
     elif provider == "signalwire":
         if not settings.signalwire_project_id: missing.append("SignalWire Project ID")
         if not settings.signalwire_api_token:  missing.append("SignalWire API Token")

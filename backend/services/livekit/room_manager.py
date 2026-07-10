@@ -11,6 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from livekit import api as lk_api
 from livekit.protocol import room as room_proto
@@ -100,28 +101,37 @@ class LiveKitRoomManager:
         Alternative call initiation path: LiveKit creates the outbound SIP call
         directly (bypassing SignalWire's REST API).
 
-        Requires a SIP trunk configured in the LiveKit dashboard that points to
-        SignalWire's SIP gateway.
+        Uses a hosted LiveKit phone number (LIVEKIT_SIP_NUMBER) as the caller ID
+        if configured — LiveKit is the carrier, no separate outbound trunk needed.
+        Otherwise falls back to a bring-your-own-carrier outbound trunk
+        (LIVEKIT_SIP_TRUNK_ID) configured in the LiveKit dashboard.
 
         Returns the participant SID.
         """
-        if not self._settings.livekit_sip_trunk_id:
+        sip_number = self._settings.livekit_sip_number
+        sip_trunk_id = self._settings.livekit_sip_trunk_id
+        if not sip_number and not sip_trunk_id:
             raise RuntimeError(
-                "LIVEKIT_SIP_TRUNK_ID is not configured — "
-                "set it in .env or use the SignalWire-initiated call path."
+                "Neither LIVEKIT_SIP_NUMBER nor LIVEKIT_SIP_TRUNK_ID is configured — "
+                "set one in .env or use the SignalWire-initiated call path."
             )
+
+        request_kwargs: dict[str, Any] = dict(
+            sip_call_to=phone_number,
+            room_name=room_name,
+            participant_identity="customer",
+            participant_name=customer_name,
+            participant_metadata=json.dumps({"call_id": call_id}),
+            wait_until_answered=False,   # non-blocking; AMD handled by SWML
+        )
+        if sip_number:
+            request_kwargs["sip_number"] = sip_number
+        else:
+            request_kwargs["sip_trunk_id"] = sip_trunk_id
 
         async with self._get_api() as lk:
             participant = await lk.sip.create_sip_participant(
-                sip_proto.CreateSIPParticipantRequest(
-                    sip_trunk_id=self._settings.livekit_sip_trunk_id,
-                    sip_call_to=phone_number,
-                    room_name=room_name,
-                    participant_identity="customer",
-                    participant_name=customer_name,
-                    participant_metadata=json.dumps({"call_id": call_id}),
-                    wait_until_answered=False,   # non-blocking; AMD handled by SWML
-                )
+                sip_proto.CreateSIPParticipantRequest(**request_kwargs)
             )
 
         logger.info(

@@ -37,6 +37,7 @@ from livekit.plugins import deepgram, elevenlabs, openai as lk_openai
 from config.settings import get_settings
 from database.repository import (
     append_transcript_entry,
+    create_call,
     finalize_call,
     get_call,
     get_session,
@@ -310,7 +311,8 @@ async def entrypoint(ctx: JobContext) -> None:
     customer_participant = await _wait_for_customer(ctx, timeout=60)
     if customer_participant is None:
         logger.warning("agent.no_customer_joined", call_id=call_id)
-        await _end_call_db(call_id, CallStatus.NO_ANSWER)
+        if call_id != "unknown":
+            await _end_call_db(call_id, CallStatus.NO_ANSWER)
         return
 
     logger.info(
@@ -318,6 +320,34 @@ async def entrypoint(ctx: JobContext) -> None:
         call_id=call_id,
         identity=customer_participant.identity,
     )
+
+    # True inbound calls (dialed straight into a LiveKit-hosted number, routed
+    # here by a LiveKit dispatch rule) carry no dispatch metadata — call_id is
+    # "unknown" and there's no Call row for them yet. Create one now so the
+    # call shows up in the dashboard/transcript/history like any other call.
+    if call_id == "unknown":
+        caller_number = (
+            customer_participant.attributes.get("sip.phoneNumber")
+            or customer_participant.attributes.get("sip.trunkPhoneNumber")
+            or customer_participant.identity
+            or "unknown"
+        )
+        try:
+            async for session in get_session():
+                new_call = await create_call(
+                    session,
+                    customer_name=caller_number,
+                    phone_number=caller_number,
+                    livekit_room_name=ctx.room.name,
+                    direction="inbound",
+                )
+                call_id = new_call.id
+                customer_name = caller_number
+                phone_number = caller_number
+                break
+            logger.info("agent.inbound_call_created", call_id=call_id, phone=caller_number)
+        except Exception as exc:
+            logger.error("agent.inbound_call_create_failed", error=str(exc))
 
     # Update DB: call is now in progress
     await _mark_in_progress(call_id)
