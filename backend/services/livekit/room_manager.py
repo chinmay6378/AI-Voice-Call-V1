@@ -101,22 +101,25 @@ class LiveKitRoomManager:
         Alternative call initiation path: LiveKit creates the outbound SIP call
         directly (bypassing SignalWire's REST API).
 
-        Uses a hosted LiveKit phone number (LIVEKIT_SIP_NUMBER) as the caller ID
-        if configured — LiveKit is the carrier, no separate outbound trunk needed.
-        Otherwise falls back to a bring-your-own-carrier outbound trunk
-        (LIVEKIT_SIP_TRUNK_ID) configured in the LiveKit dashboard.
+        Requires an outbound SIP trunk (LIVEKIT_SIP_TRUNK_ID) configured in the
+        LiveKit dashboard — confirmed via a live test that LiveKit's server
+        rejects CreateSIPParticipant with "missing sip trunk id" if sip_trunk_id
+        is omitted, even when sip_number is set. LIVEKIT_SIP_NUMBER (if set) is
+        passed alongside it as the caller-ID number to present, not a substitute
+        for the trunk.
 
         Returns the participant SID.
         """
-        sip_number = self._settings.livekit_sip_number
         sip_trunk_id = self._settings.livekit_sip_trunk_id
-        if not sip_number and not sip_trunk_id:
+        sip_number = self._settings.livekit_sip_number
+        if not sip_trunk_id:
             raise RuntimeError(
-                "Neither LIVEKIT_SIP_NUMBER nor LIVEKIT_SIP_TRUNK_ID is configured — "
-                "set one in .env or use the SignalWire-initiated call path."
+                "LIVEKIT_SIP_TRUNK_ID is not configured — "
+                "set it in .env or use the SignalWire-initiated call path."
             )
 
         request_kwargs: dict[str, Any] = dict(
+            sip_trunk_id=sip_trunk_id,
             sip_call_to=phone_number,
             room_name=room_name,
             participant_identity="customer",
@@ -126,8 +129,6 @@ class LiveKitRoomManager:
         )
         if sip_number:
             request_kwargs["sip_number"] = sip_number
-        else:
-            request_kwargs["sip_trunk_id"] = sip_trunk_id
 
         async with self._get_api() as lk:
             participant = await lk.sip.create_sip_participant(
