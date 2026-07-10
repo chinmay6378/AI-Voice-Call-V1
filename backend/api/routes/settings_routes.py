@@ -22,6 +22,7 @@ ALLOWED_KEYS = {
     "livekit_api_key",
     "livekit_api_secret",
     "livekit_sip_trunk_id",
+    "livekit_sip_number",
     "livekit_sip_uri",
     "livekit_sip_username",
     "livekit_inbound_sip_trunk_id",

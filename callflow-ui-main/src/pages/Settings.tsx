@@ -316,19 +316,15 @@ export default function Settings() {
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="livekit_sip">LiveKit SIP (Vobiz — India)</SelectItem>
-                      <SelectItem value="signalwire">SignalWire (International)</SelectItem>
+                      <SelectItem value="livekit_sip">LiveKit SIP (direct outbound)</SelectItem>
+                      <SelectItem value="signalwire">SignalWire (webhook/AMD pipeline)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground">
                     {telephonyProvider === "signalwire"
                       ? "SignalWire will dial the number. On answer, call bridges into LiveKit via your SIP URI."
-                      : "LiveKit dials directly via the Vobiz SIP trunk configured below."}
+                      : "LiveKit dials directly via the SIP trunk/number configured below."}
                   </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Caller ID</Label>
-                  <Input placeholder="+1 (415) 555-0100" />
                 </div>
               </div>
               <div className="border-t border-border pt-4 space-y-4">
@@ -337,7 +333,10 @@ export default function Settings() {
                 <ApiKeyRow label="LiveKit API Key"    storageKey="livekit_api_key"      backendKey="livekit_api_key"      serverValue={sv("livekit_api_key")} />
                 <ApiKeyRow label="LiveKit API Secret" storageKey="livekit_api_secret"   backendKey="livekit_api_secret"   serverValue={sv("livekit_api_secret")} />
                 {telephonyProvider === "livekit_sip" && (
-                  <ApiKeyRow label="SIP Trunk ID (Vobiz)" storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} hint="Trunk ID from LiveKit dashboard for Vobiz" />
+                  <>
+                    <ApiKeyRow label="Caller ID (hosted number)" storageKey="livekit_sip_number" backendKey="livekit_sip_number" serverValue={sv("livekit_sip_number")} placeholder="+14843174088" hint="Phone number bought via LiveKit dashboard → Telephony → Phone numbers. Requires SIP Trunk ID below to also be set — LiveKit's API rejects calls without a trunk ID even when a hosted number is set." />
+                    <ApiKeyRow label="SIP Trunk ID" storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} hint="Outbound SIP trunk ID from LiveKit dashboard → Telephony → SIP trunks" />
+                  </>
                 )}
                 {telephonyProvider === "signalwire" && (
                   <ApiKeyRow label="LiveKit SIP URI" storageKey="livekit_sip_uri" backendKey="livekit_sip_uri" serverValue={sv("livekit_sip_uri")} placeholder="sip.livekit.cloud" hint="Inbound SIP URI — SignalWire bridges the answered call here" />
