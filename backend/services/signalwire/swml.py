@@ -106,7 +106,18 @@ def build_human_only_swml(
     room_name: str,
     call_id: str,
 ) -> str:
-    """Connect immediately without AMD — useful when AMD is handled externally."""
+    """
+    Connect immediately without AMD — useful when AMD is handled externally.
+
+    Explicitly sets codecs/encryption instead of leaving them to SignalWire's
+    defaults for SIP-URI destinations — the LiveKit inbound trunk this dials
+    into has media encryption (SRTP) disabled, and a direct softphone test to
+    the same URI worked fine, but this connect verb never resulted in a room
+    participant on LiveKit's side. Matching the trunk's actual codec/encryption
+    expectations explicitly (rather than relying on SignalWire's un-hinted
+    default SDP offer for an unfamiliar external SIP domain) is the next thing
+    to rule in/out.
+    """
     sip_destination = _build_sip_uri(settings, room_name)
     doc = _doc(
         {
@@ -116,6 +127,9 @@ def build_human_only_swml(
                         "from": settings.signalwire_from_number,
                         "to": sip_destination,
                         "timeout": 30,
+                        "codecs": "PCMU,PCMA,OPUS",
+                        "encryption": "forbidden",
+                        "webrtc_media": False,
                     }
                 }
             ]
