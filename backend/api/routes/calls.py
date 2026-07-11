@@ -381,24 +381,21 @@ async def setup_inbound(
 
     This rule uses Individual routing (one room per caller, prefix 'inbound-')
     and auto-dispatches the voice-call-agent so no explicit dispatch is needed
-    when an inbound call arrives.
+    when an inbound call arrives. Scoped to LIVEKIT_INBOUND_SIP_TRUNK_ID if set
+    (Settings UI → Telephony → Inbound SIP Trunk ID) — otherwise matches
+    inbound calls on any trunk in the project.
 
-    Run this once after deploying, or again if you need to reset the rule.
-    The rule persists across restarts — no need to call this on every boot.
-
-    Prerequisites (do these in the LiveKit dashboard before calling this):
-      1. SIP → Inbound Trunks → edit trunk → clear the Numbers field (accept all)
-      2. Delete any manually-created dispatch rules so there are no conflicts
+    Run this once after creating/changing the inbound trunk, or after changing
+    the Inbound SIP Trunk ID setting. The rule persists across restarts.
     """
     try:
-        rule_id = await lk.create_inbound_dispatch_rule()
+        rule_id = await lk.create_inbound_dispatch_rule(
+            inbound_trunk_id=settings.livekit_inbound_sip_trunk_id
+        )
         return {
             "rule_id": rule_id,
-            "message": "Inbound dispatch rule created. Configure SignalWire phone number webhooks as follows:",
-            "signalwire_config": {
-                "swml_webhook": f"{settings.app_base_url.rstrip('/')}/webhooks/inbound/swml",
-                "status_callback": f"{settings.app_base_url.rstrip('/')}/webhooks/inbound/status",
-            },
+            "trunk_id": settings.livekit_inbound_sip_trunk_id or "all trunks (none configured)",
+            "message": "Inbound dispatch rule created.",
         }
     except Exception as exc:
         raise HTTPException(

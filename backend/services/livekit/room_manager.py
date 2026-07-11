@@ -194,13 +194,17 @@ class LiveKitRoomManager:
         logger.info("livekit.dispatch_rule_created", room=room_name, rule_id=result.sip_dispatch_rule_id)
         return result.sip_dispatch_rule_id
 
-    async def create_inbound_dispatch_rule(self) -> str:
+    async def create_inbound_dispatch_rule(self, *, inbound_trunk_id: str = "") -> str:
         """
         Create (or recreate) the permanent inbound SIP dispatch rule.
 
         Uses Individual routing so each caller gets their own room named
         'inbound-<caller-number>'.  Auto-dispatches voice-call-agent so no
         explicit dispatch is needed when an inbound call arrives.
+
+        If inbound_trunk_id is set, the rule is scoped to that trunk only
+        (via trunk_ids) — otherwise it matches inbound calls on ANY trunk in
+        the project, which also picks up unrelated/leftover trunks.
 
         Call this once via POST /call/inbound/setup; the rule persists
         across calls.  Safe to call again — deletes any existing rule
@@ -220,22 +224,27 @@ class LiveKitRoomManager:
             except Exception as exc:
                 logger.warning("livekit.inbound_rule_cleanup_failed", error=str(exc))
 
-            result = await lk.sip.create_dispatch_rule(
-                sip_proto.CreateSIPDispatchRuleRequest(
-                    rule=sip_proto.SIPDispatchRule(
-                        dispatch_rule_individual=sip_proto.SIPDispatchRuleIndividual(
-                            room_prefix="inbound-",
-                        ),
+            req = sip_proto.CreateSIPDispatchRuleRequest(
+                rule=sip_proto.SIPDispatchRule(
+                    dispatch_rule_individual=sip_proto.SIPDispatchRuleIndividual(
+                        room_prefix="inbound-",
                     ),
-                    name="inbound-calls",
-                    room_config=room_proto.RoomConfiguration(
-                        agents=[
-                            agent_dispatch_proto.RoomAgentDispatch(agent_name="voice-call-agent")
-                        ]
-                    ),
-                )
+                ),
+                name="inbound-calls",
+                room_config=room_proto.RoomConfiguration(
+                    agents=[
+                        agent_dispatch_proto.RoomAgentDispatch(agent_name="voice-call-agent")
+                    ]
+                ),
             )
-        logger.info("livekit.inbound_dispatch_rule_created", rule_id=result.sip_dispatch_rule_id)
+            if inbound_trunk_id:
+                req.trunk_ids.append(inbound_trunk_id)
+            result = await lk.sip.create_dispatch_rule(req)
+        logger.info(
+            "livekit.inbound_dispatch_rule_created",
+            rule_id=result.sip_dispatch_rule_id,
+            trunk_id=inbound_trunk_id or "all",
+        )
         return result.sip_dispatch_rule_id
 
     async def delete_call_dispatch_rule(self, rule_id: str) -> None:

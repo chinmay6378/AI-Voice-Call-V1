@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getConfiguredKeys, getHealth, saveConfigKey } from "@/lib/api";
+import { getConfiguredKeys, getHealth, saveConfigKey, setupInboundDispatchRule } from "@/lib/api";
 import { ELEVENLABS_VOICES } from "@/pages/CreateCampaign";
 
 // ── API key field ─────────────────────────────────────────────────────────────
@@ -91,6 +91,46 @@ function ApiKeyRow({
         </Button>
       </div>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Inbound dispatch rule setup ──────────────────────────────────────────────
+function InboundDispatchRuleButton() {
+  const [loading, setLoading] = useState(false);
+  const [lastRuleId, setLastRuleId] = useState<string | null>(null);
+
+  const apply = async () => {
+    setLoading(true);
+    try {
+      const res = await setupInboundDispatchRule();
+      setLastRuleId(res.rule_id);
+      toast.success("Inbound dispatch rule applied", {
+        description: `Trunk: ${res.trunk_id}`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to apply";
+      toast.error("Failed to apply inbound dispatch rule", { description: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <Button size="sm" onClick={apply} disabled={loading} className="shrink-0 text-xs">
+          <Zap className="mr-1 h-3 w-3" />{loading ? "Applying…" : "Apply Inbound Rule"}
+        </Button>
+        {lastRuleId && (
+          <span className="text-[10px] font-mono text-muted-foreground">rule: {lastRuleId}</span>
+        )}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Run this after saving the Inbound SIP Trunk ID above, or after creating/changing the
+        inbound trunk in the LiveKit dashboard. Auto-dispatches the agent to any call arriving
+        on that trunk — no restart needed.
+      </p>
     </div>
   );
 }
@@ -341,6 +381,17 @@ export default function Settings() {
                 {telephonyProvider === "signalwire" && (
                   <ApiKeyRow label="LiveKit SIP URI" storageKey="livekit_sip_uri" backendKey="livekit_sip_uri" serverValue={sv("livekit_sip_uri")} placeholder="sip.livekit.cloud" hint="Inbound SIP URI — SignalWire bridges the answered call here" />
                 )}
+              </div>
+              <div className="border-t border-border pt-4 space-y-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Inbound Calls</p>
+                <ApiKeyRow
+                  label="Inbound SIP Trunk ID"
+                  storageKey="livekit_inbound_sip_trunk_id"
+                  backendKey="livekit_inbound_sip_trunk_id"
+                  serverValue={sv("livekit_inbound_sip_trunk_id")}
+                  hint="Inbound SIP trunk ID from LiveKit dashboard → Telephony → SIP trunks (Inbound direction). Leave blank to accept inbound calls on any trunk in the project."
+                />
+                <InboundDispatchRuleButton />
               </div>
               {telephonyProvider === "signalwire" && (
                 <div className="border-t border-border pt-4 space-y-4">

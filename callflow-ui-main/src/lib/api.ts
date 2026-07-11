@@ -325,3 +325,12 @@ export async function saveConfigKey(key: string, value: string): Promise<void> {
     throw new Error(err.detail ?? "Failed to save setting");
   }
 }
+
+export async function setupInboundDispatchRule(): Promise<{ rule_id: string; trunk_id: string }> {
+  const res = await fetch(`${API_BASE}/call/inbound/setup`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? "Failed to set up inbound dispatch rule");
+  }
+  return res.json();
+}
