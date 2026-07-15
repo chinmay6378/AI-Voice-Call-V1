@@ -1,6 +1,9 @@
-# Setup Guide
+# Setup Guide — SignalWire (Option B)
 
-Complete step-by-step guide to getting all credentials and running the system.
+This guide covers the **SignalWire** telephony path in detail (`TELEPHONY_PROVIDER=signalwire`).
+For the recommended LiveKit-native SIP path (works with Twilio, Telnyx, etc.), see the
+[root README's Telephony setup section](../../README.md#telephony-setup) instead — it's simpler
+and doesn't need a public webhook URL.
 
 ---
 
@@ -12,16 +15,16 @@ Complete step-by-step guide to getting all credentials and running the system.
 - A **Deepgram** account
 - A **Groq** account
 - An **ElevenLabs** account
-- `ngrok` (for local development webhook exposure)
+- `ngrok` (for local development — SignalWire needs a public URL to POST webhooks to)
 
 ---
 
-## Step 1 — Clone and Install
+## Step 1 — Install
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
@@ -42,9 +45,9 @@ Dashboard → Settings → API:
 ### 2c. Buy a Phone Number
 Phone Numbers → Buy a number. This becomes `SIGNALWIRE_FROM_NUMBER`.
 
-### 2d. Configure the Number (Optional)
-For the POC the number just needs to be owned by your project.
-SignalWire will call your SWML webhook URL when outbound calls connect.
+No further per-number configuration is needed — the SWML webhook URL is passed
+per-call by the backend when it dials out, so nothing needs to be set on the
+number itself for outbound calling.
 
 ---
 
@@ -59,28 +62,26 @@ Dashboard → Settings → API Keys:
 - **API Key** → `LIVEKIT_API_KEY`
 - **API Secret** → `LIVEKIT_API_SECRET`
 
-### 3c. Configure SIP (Required for Phone Calls)
+### 3c. Get the Inbound SIP URI
 
-LiveKit SIP bridges the PSTN call from SignalWire into a LiveKit room.
+This is the domain SignalWire's SWML `connect` verb bridges the answered call into.
 
-**Create a SIP Trunk:**
-1. Dashboard → SIP → Trunks → New Trunk
-2. Set the outbound/inbound SIP credentials to your SignalWire SIP gateway:
-   - SIP Server: `sip.signalwire.com` (or your space's SIP domain)
-   - Auth Username: `SIGNALWIRE_SIP_USERNAME`
-   - Auth Password: `SIGNALWIRE_SIP_PASSWORD`
-3. Copy the **Trunk ID** → `LIVEKIT_SIP_TRUNK_ID`
+1. Dashboard → **Telephony → SIP trunks** → your inbound trunk (create one if you
+   don't have one — direction Inbound, Numbers can be left blank to accept any).
+2. Copy its SIP URI → `LIVEKIT_SIP_URI` (e.g. `xxxx.sip.livekit.cloud`).
 
-**Get Inbound SIP URI:**
-1. Dashboard → SIP → Inbound
-2. Copy the SIP URI domain → `LIVEKIT_SIP_URI`
-   (e.g., `xxxx.pstn.livekit.cloud`)
+The backend creates a temporary, per-call SIP dispatch rule automatically before
+each SignalWire call is dialed — you don't need to create dispatch rules manually
+for this path.
 
-**Create a Dispatch Rule:**
-1. Dashboard → SIP → Dispatch Rules → New Rule
-2. Rule type: "Direct to room"
-3. Room prefix: `call-`
-4. This routes `sip:call-XXXX@livekit-sip-domain` to room `call-XXXX`
+**Known caveat:** getting SignalWire's `connect` verb to successfully bridge into
+an arbitrary external SIP domain can run into carrier-side restrictions that
+aren't visible from either dashboard (we hit this in practice — the call
+connects and completes normally on SignalWire's side, but no participant ever
+reaches the LiveKit room). If calls fail silently this way after following this
+guide correctly, it's worth confirming with SignalWire support whether your
+account needs a "SIP Gateway" resource registered for the destination domain
+rather than a bare `sip:` URI in the connect verb.
 
 ---
 
@@ -124,21 +125,26 @@ Copy the `https://xxxx.ngrok.io` URL into `.env`:
 APP_BASE_URL=https://xxxx.ngrok.io
 ```
 
+For production, this should be your real public domain/IP instead.
+
 ---
 
 ## Step 8 — Start the Application
 
 ```bash
-# Terminal 1 — API Server (also spawns agent worker automatically)
+# Also spawns the agent worker automatically (AUTO_START_AGENT=true default)
 uvicorn main:app --reload --port 8000
 
-# OR manage processes separately:
-# Terminal 1 — API Server
+# OR manage the two processes yourself:
+# Terminal 1
 AUTO_START_AGENT=false uvicorn main:app --reload --port 8000
-
-# Terminal 2 — Agent Worker  
+# Terminal 2
 python -m services.livekit.agent start
 ```
+
+Confirm `TELEPHONY_PROVIDER=signalwire` in `.env` (or the Settings UI's Active
+Provider dropdown) — otherwise calls will silently use the LiveKit-native path
+instead and none of the SignalWire webhook code will run.
 
 ---
 
@@ -155,7 +161,7 @@ Response:
 {
   "call_id": "uuid-here",
   "status": "dialing",
-  "message": "Outbound call to +15551234567 initiated."
+  "message": "Outbound call to +15551234567 initiated via signalwire. call_id=uuid-here"
 }
 ```
 
@@ -164,24 +170,9 @@ Check status:
 curl http://localhost:8000/call/status/{call_id}
 ```
 
-View transcript after call:
+View transcript after the call:
 ```bash
 curl http://localhost:8000/call/transcript/{call_id}
-```
-
----
-
-## Docker Deployment
-
-```bash
-# Build
-docker build -t ai-voice-agent ./backend
-
-# Run
-docker run -p 8000:8000 \
-  --env-file backend/.env \
-  -v $(pwd)/data:/app/data \
-  ai-voice-agent
 ```
 
 ---
@@ -192,7 +183,7 @@ docker run -p 8000:8000 \
 |---------|----------|
 | `signalwire.call_failed` | Check Project ID, API Token, Space URL, From Number |
 | `livekit.create_room_failed` | Check LiveKit URL, API Key, Secret |
-| `livekit.dispatch_failed` | Agent worker may not be running; check logs |
-| SWML webhook not fired | Check APP_BASE_URL is publicly accessible (ngrok) |
+| `livekit.dispatch_failed` | Agent worker may not be running; check `registered worker` appeared in logs |
+| Call connects/completes on SignalWire but agent never speaks | The SIP bridge into LiveKit never produced a room participant — see the caveat in Step 3c |
 | No audio from agent | Check Deepgram + ElevenLabs + Groq API keys |
-| Call goes to voicemail always | AMD may be mis-detecting; try `AMD_TIMEOUT_SECONDS=45` |
+| `TELEPHONY_PROVIDER` seems ignored | It defaults to `livekit_sip` if unset or misspelled — confirm it's exactly `signalwire` |

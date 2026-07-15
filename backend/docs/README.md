@@ -1,52 +1,49 @@
-# AI Voice Call Agent — Backend POC
+# AI Voice Call Agent — Backend
 
-A production-quality backend for making **AI-powered outbound phone calls**.  
-One call at a time. No frontend required.
+The FastAPI server + LiveKit voice-agent worker that power outbound and inbound
+AI phone calls. For the overall project (including the React frontend) and the
+fastest way to get running, see the [root README](../../README.md).
 
 ---
 
 ## What It Does
 
-1. You POST a customer name and phone number.
-2. The backend dials the customer via **SignalWire SIP**.
-3. **Answering machine detection (AMD)** runs automatically:
-   - **Human answers** → conversation starts with your AI agent.
-   - **Voicemail detected** → a pre-recorded (or TTS) message is left.
-4. The AI agent:
-   - Streams audio through **LiveKit**.
+1. You POST a customer name and phone number (or use the web UI).
+2. The backend dials out via a SIP trunk (either **LiveKit-native SIP**, working
+   with any SIP carrier like Twilio, or **SignalWire's REST API**).
+3. A **LiveKit agent worker** joins the call once it's genuinely answered and:
    - Transcribes speech in real time with **Deepgram**.
-   - Generates natural responses with **Groq (Llama 3.3 70B)**.
+   - Generates responses with **Groq** (Llama 3.3 70B, OpenAI-compatible API).
    - Speaks back using **ElevenLabs** streaming TTS.
-5. The full transcript, call status, and logs are stored in **SQLite**.
+   - Detects voicemail/IVR from live transcribed speech and reacts accordingly.
+4. Inbound calls to a configured number are auto-dispatched to the same agent
+   via a LiveKit SIP dispatch rule — no manual intervention needed per call.
+5. The full transcript, call status, and event log are stored in SQLite (or
+   Postgres, via `DATABASE_URL`).
+
+Two telephony paths are supported side by side — see the root README's
+[Telephony setup](../../README.md#telephony-setup) section for how to configure
+either one.
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Clone / enter the backend directory
 cd backend
-
-# 2. Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 4. Configure environment
 cp .env.example .env
 # Edit .env with your real API credentials
 
-# 5. Expose localhost for SignalWire webhooks (dev only)
-ngrok http 8000
-# Copy the https URL into APP_BASE_URL in .env
-
-# 6. Start the server (also auto-starts the agent worker)
 uvicorn main:app --reload --port 8000
 ```
+This also auto-starts the LiveKit agent worker as a child process
+(`AUTO_START_AGENT=true` by default) — watch for `registered worker` in the logs.
 
-See [SETUP.md](SETUP.md) for detailed credential setup instructions.
+See [SETUP.md](SETUP.md) for the detailed SignalWire-specific walkthrough.
 
 ---
 
@@ -59,7 +56,9 @@ See [SETUP.md](SETUP.md) for detailed credential setup instructions.
 | `GET`  | `/call/status/{call_id}` | Poll call status |
 | `GET`  | `/call/transcript/{call_id}` | Full conversation transcript |
 | `GET`  | `/call/logs/{call_id}` | Event log |
-| `GET`  | `/calls/active` | Currently active call |
+| `POST` | `/call/inbound/setup` | (Re)create the inbound SIP dispatch rule |
+| `GET`  | `/calls` / `/calls/active` | List calls / currently active call |
+| `GET`  | `/settings/keys` / `POST /settings/keys` | Read/write DB-persisted config (used by the Settings UI) |
 | `GET`  | `/health` | Health check |
 | `GET`  | `/docs` | Interactive Swagger UI |
 
@@ -77,16 +76,13 @@ See [API.md](API.md) for full request/response schemas.
 │       ├─ 1. Create LiveKit room                             │
 │       ├─ 2. Persist Call record (SQLite)                    │
 │       ├─ 3. Dispatch agent worker to room                   │
-│       └─ 4. Tell SignalWire to dial customer                │
+│       └─ 4. Dial the customer (LiveKit SIP or SignalWire)    │
 │                                                             │
-│  POST /webhooks/swml/{call_id}  ← SignalWire calls this     │
-│       └─ Returns SWML: detect AMD → route to LiveKit SIP    │
-│                                                             │
-│  POST /webhooks/amd/{call_id}   ← AMD result callback       │
-│  POST /webhooks/status/{call_id} ← call lifecycle updates   │
+│  POST /webhooks/*   ← SignalWire path only                  │
+│  POST /call/inbound/setup ← one-time inbound rule setup     │
 └─────────────────────────────────────────────────────────────┘
          │
-         ▼ SignalWire dials customer via PSTN
+         ▼ dials customer via PSTN
 ┌────────────────────┐
 │   Customer Phone   │
 └────────┬───────────┘
@@ -118,14 +114,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full architectural deep-dive.
 
 | Layer | Technology |
 |-------|-----------|
-| Web framework | FastAPI 0.115+ |
+| Web framework | FastAPI |
 | Runtime | Python 3.12, asyncio |
-| Telephony | SignalWire SIP + SWML |
-| Real-time audio | LiveKit Agents 0.11+ |
+| Telephony | LiveKit SIP (any carrier) or SignalWire SIP + SWML |
+| Real-time audio | LiveKit Agents |
 | Speech-to-text | Deepgram nova-2 |
 | Language model | Groq / Llama 3.3 70B |
 | Text-to-speech | ElevenLabs Turbo v2.5 |
-| Database | SQLite + SQLAlchemy 2.0 async |
+| Database | SQLite (default) or Postgres, via SQLAlchemy 2.0 async |
 | Logging | structlog |
 
 ---
@@ -144,7 +140,12 @@ Tests mock all external services — no credentials required.
 ## Production Notes
 
 - Replace SQLite with PostgreSQL for multi-instance deployments.
-- Run the API server and agent worker as separate containers/processes.
-- Use a proper secrets manager (AWS Secrets Manager, Vault) instead of .env.
-- Put the API behind a reverse proxy (nginx / Caddy) with TLS.
-- Configure SignalWire webhook authentication (X-SignalWire-Signature) for security.
+- The included `Dockerfile`/`start.sh` already run the API server and agent
+  worker as a supervised pair inside one container (if either process dies,
+  the container exits so `restart: unless-stopped` brings both back).
+- Use a proper secrets manager (AWS Secrets Manager, Vault) instead of `.env`
+  for production credentials.
+- Put the API behind a reverse proxy (the included `docker-compose.yml` uses
+  Nginx via the frontend container) with TLS in front of it.
+- If using the SignalWire path, configure webhook authentication
+  (X-SignalWire-Signature) for security.

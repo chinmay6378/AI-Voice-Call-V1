@@ -20,8 +20,12 @@ services:
       context: ./callflow-ui-main
       dockerfile: Dockerfile
       args:
-        # *** CHANGE THIS to your Contabo VPS public IP ***
-        VITE_API_BASE_URL: "http://85.239.242.78"
+        # Public address the browser will reach this app at. Defaults to
+        # localhost for running on your own machine. For a VPS/server
+        # deployment, set VITE_API_BASE_URL in a root .env file (next to this
+        # docker-compose.yml) to your server's public IP or domain, e.g.
+        # VITE_API_BASE_URL=http://203.0.113.10
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://localhost}"
     ports:
       - "80:80"
     depends_on:

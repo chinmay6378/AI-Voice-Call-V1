@@ -4,6 +4,7 @@ Uses SQLAlchemy 2.0 async sessions.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
 from typing import AsyncIterator
@@ -36,6 +37,13 @@ async def init_db(database_url: str) -> None:
     connect_args = {}
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+        # sqlite+aiosqlite:///./data/calls.db -> ./data/calls.db — a fresh
+        # clone won't have this directory yet and aiosqlite fails outright
+        # rather than creating it.
+        db_path = database_url.split("///", 1)[-1]
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
     _engine = create_async_engine(
         database_url,
