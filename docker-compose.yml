@@ -25,7 +25,7 @@ services:
         # deployment, set VITE_API_BASE_URL in a root .env file (next to this
         # docker-compose.yml) to your server's public IP or domain, e.g.
         # VITE_API_BASE_URL=http://203.0.113.10
-        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://localhost}"
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://85.239.242.78}"
     ports:
       - "80:80"
     depends_on:
