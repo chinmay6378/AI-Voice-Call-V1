@@ -38,10 +38,10 @@ const App = () => (
               <Route path="/results"        element={<CallResults />} />
               <Route path="/analytics"      element={<Analytics />} />
               {/* Legacy routes — kept for backward compat */}
-              <Route path="/calls"          element={<Calls />} />
-              <Route path="/calls/:id"      element={<CallDetails />} />
+              <Route path="/call-list"      element={<Calls />} />
+              <Route path="/call-details/:id" element={<CallDetails />} />
               <Route path="/inbound"        element={<Inbound />} />
-              <Route path="/health"         element={<Health />} />
+              <Route path="/system-health"  element={<Health />} />
               <Route path="/settings"       element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -153,7 +153,7 @@ export default function LiveCalls() {
 function CallRow({ call: c }: { call: Call }) {
   const isLive = ["connected", "dialing", "ringing"].includes(c.status);
   return (
-    <Link to={`/calls/${c.id}`}>
+    <Link to={`/call-details/${c.id}`}>
       <div className={cn(
         "flex items-center gap-3 rounded-xl border p-3 transition-all hover:shadow-sm",
         isLive ? "border-primary/30 bg-primary/5" : "border-border bg-card",

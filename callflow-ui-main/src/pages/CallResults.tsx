@@ -237,7 +237,7 @@ export default function CallResults() {
                   <TableRow
                     key={c.id}
                     className="cursor-pointer hover:bg-muted/30"
-                    onClick={() => navigate(`/calls/${c.id}`)}
+                    onClick={() => navigate(`/call-details/${c.id}`)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ export default function CallResults() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/calls/${c.id}`)}
+                        onClick={() => navigate(`/call-details/${c.id}`)}
                         className="text-xs"
                       >
                         <Eye className="mr-1.5 h-3.5 w-3.5" />View

@@ -239,7 +239,7 @@ export default function Index() {
                 {recentCalls.map((c) => (
                   <Link
                     key={c.id}
-                    to={`/calls/${c.id}`}
+                    to={`/call-details/${c.id}`}
                     className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/50 transition-colors group"
                   >
                     <div className={cn(

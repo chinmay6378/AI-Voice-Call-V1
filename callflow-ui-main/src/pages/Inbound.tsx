@@ -270,7 +270,7 @@ export default function Inbound() {
                 </TableHeader>
                 <TableBody>
                   {calls.map((c) => (
-                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/calls/${c.id}`)}>
+                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/call-details/${c.id}`)}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
@@ -286,7 +286,7 @@ export default function Inbound() {
                       <TableCell className="tabular-nums text-sm">{formatDuration(c.duration)}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{formatDate(c.date)}</TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate(`/calls/${c.id}`)}>
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate(`/call-details/${c.id}`)}>
                           <Eye className="mr-1.5 h-3.5 w-3.5" />View
                         </Button>
                       </TableCell>

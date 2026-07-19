@@ -60,7 +60,7 @@ export function CallsTable({ calls, loading, compact }: Props) {
         </TableHeader>
         <TableBody>
           {rows.map((c) => (
-            <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate(`/calls/${c.id}`)}>
+            <TableRow key={c.id} className="cursor-pointer" onClick={() => navigate(`/call-details/${c.id}`)}>
               <TableCell className="font-mono text-xs">{c.id}</TableCell>
               <TableCell className="font-medium">{c.customerName}</TableCell>
               <TableCell className="text-muted-foreground">{c.phoneNumber}</TableCell>
@@ -68,7 +68,7 @@ export function CallsTable({ calls, loading, compact }: Props) {
               <TableCell className="tabular-nums">{formatDuration(c.duration)}</TableCell>
               <TableCell className="text-muted-foreground">{formatDate(c.date)}</TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/calls/${c.id}`); }}>
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/call-details/${c.id}`); }}>
                   <Eye className="mr-1.5 h-3.5 w-3.5" /> View
                 </Button>
               </TableCell>

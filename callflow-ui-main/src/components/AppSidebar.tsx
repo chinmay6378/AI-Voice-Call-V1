@@ -32,7 +32,7 @@ const groups = [
   {
     label: "System",
     items: [
-      { title: "Health",    url: "/health",   icon: Activity },
+      { title: "Health",    url: "/system-health",   icon: Activity },
       { title: "Settings",  url: "/settings", icon: Settings },
     ],
   },

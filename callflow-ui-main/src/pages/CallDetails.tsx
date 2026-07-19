@@ -38,7 +38,7 @@ export default function CallDetails() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/calls"><ArrowLeft className="mr-1.5 h-4 w-4" /> Back</Link>
+            <Link to="/call-list"><ArrowLeft className="mr-1.5 h-4 w-4" /> Back</Link>
           </Button>
           <div>
             <div className="flex items-center gap-2">

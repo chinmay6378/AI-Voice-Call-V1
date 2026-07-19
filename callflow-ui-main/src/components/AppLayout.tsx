@@ -13,7 +13,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   "/live":          { title: "Live Calls",         subtitle: "Monitor active calls in real time" },
   "/results":       { title: "Call Results",       subtitle: "Complete record of all outbound calls" },
   "/analytics":     { title: "Analytics",          subtitle: "Performance insights and trends" },
-  "/health":        { title: "System Health",      subtitle: "Realtime status of platform services" },
+  "/system-health": { title: "System Health",      subtitle: "Realtime status of platform services" },
   "/settings":      { title: "Settings",           subtitle: "Platform configuration and API keys" },
 };
 
@@ -21,7 +21,7 @@ export default function AppLayout() {
   const { pathname } = useLocation();
   const meta =
     titles[pathname] ??
-    (pathname.startsWith("/calls/")     ? { title: "Call Details",     subtitle: "Full call transcript and events" } :
+    (pathname.startsWith("/call-details/") ? { title: "Call Details",     subtitle: "Full call transcript and events" } :
      pathname.startsWith("/campaigns/") ? { title: "Campaign Details", subtitle: "Campaign analytics and contacts" } :
      { title: "", subtitle: "" });
 
