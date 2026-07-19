@@ -115,6 +115,7 @@ export async function startCall(payload: {
   phoneNumber: string;
   propertyType: string;
   promptId: string;
+  systemPrompt?: string;
 }): Promise<{ callId: string }> {
   const res = await fetch(`${API_BASE}/call/start`, {
     method: "POST",
@@ -122,6 +123,7 @@ export async function startCall(payload: {
     body: JSON.stringify({
       customer_name: payload.customerName,
       phone_number: payload.phoneNumber,
+      ...(payload.systemPrompt ? { system_prompt: payload.systemPrompt } : {}),
     }),
   });
   if (!res.ok) {

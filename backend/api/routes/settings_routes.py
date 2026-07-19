@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.settings import apply_db_overrides
-from database.repository import get_all_db_settings, get_session, set_db_setting
+from config.settings import apply_db_overrides, get_settings
+from database.repository import get_session, set_db_setting
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -44,10 +44,16 @@ class SaveKeyRequest(BaseModel):
 
 
 @router.get("/keys")
-async def get_keys(session: AsyncSession = Depends(get_session)) -> dict[str, str]:
-    """Return all persisted settings that are in the allowed list."""
-    all_settings = await get_all_db_settings(session)
-    return {k: v for k, v in all_settings.items() if k in ALLOWED_KEYS}
+async def get_keys() -> dict[str, str]:
+    """
+    Return the current EFFECTIVE value of every allowed setting — whichever
+    of .env or a DB override (already merged by apply_db_overrides on
+    startup/save) is currently active. This lets the Settings UI show the
+    real credentials in use by default, instead of blank fields until
+    someone explicitly saves through the UI.
+    """
+    settings = get_settings()
+    return {k: str(getattr(settings, k, "") or "") for k in ALLOWED_KEYS}
 
 
 @router.post("/keys")

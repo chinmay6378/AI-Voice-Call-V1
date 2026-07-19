@@ -60,6 +60,7 @@ class LiveKitRoomManager:
         call_id: str,
         customer_name: str,
         phone_number: str,
+        system_prompt: str | None = None,
     ) -> str:
         """
         Send an explicit dispatch request so an agent worker picks up this call.
@@ -70,6 +71,7 @@ class LiveKitRoomManager:
                 "call_id": call_id,
                 "customer_name": customer_name,
                 "phone_number": phone_number,
+                "system_prompt": system_prompt or "",
             }
         )
 

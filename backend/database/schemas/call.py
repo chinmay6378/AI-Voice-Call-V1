@@ -12,6 +12,10 @@ from database.models.call import CallStatus, AnsweredBy
 class StartCallRequest(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=255, examples=["John Doe"])
     phone_number: str = Field(..., examples=["+15551234567"])
+    system_prompt: str | None = Field(
+        None, max_length=4000,
+        description="Optional override for this call's agent instructions — used for testing prompts from the Live Calls page. Falls back to the default prompt when omitted.",
+    )
 
     @field_validator("phone_number")
     @classmethod

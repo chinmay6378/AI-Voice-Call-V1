@@ -158,6 +158,7 @@ async def start_call(
             call_id=call.id,
             customer_name=body.customer_name,
             phone_number=body.phone_number,
+            system_prompt=body.system_prompt,
         )
         call.livekit_dispatch_id = dispatch_id
         await session.commit()

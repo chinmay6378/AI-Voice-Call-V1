@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { startCall } from "@/lib/api";
@@ -18,6 +19,7 @@ export function StartCallCard({ activeCallId, onStarted }: Props) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [propertyType, setPropertyType] = useState("Single Family");
   const [promptId, setPromptId] = useState("real-estate-acquisition");
+  const [systemPrompt, setSystemPrompt] = useState("");
   const [loading, setLoading] = useState(false);
 
   const isBlocked = !!activeCallId;
@@ -34,7 +36,7 @@ export function StartCallCard({ activeCallId, onStarted }: Props) {
     }
     setLoading(true);
     try {
-      const res = await startCall({ customerName, phoneNumber, propertyType, promptId });
+      const res = await startCall({ customerName, phoneNumber, propertyType, promptId, systemPrompt });
       toast.success("Call started", { description: `Dialing ${phoneNumber}…` });
       onStarted(res.callId);
       setCustomerName("");
@@ -103,6 +105,18 @@ export function StartCallCard({ activeCallId, onStarted }: Props) {
                 <SelectItem value="real-estate-acquisition">Real Estate Acquisition</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="sm:col-span-2 space-y-2">
+            <Label htmlFor="sysPrompt">System Prompt (optional override)</Label>
+            <Textarea
+              id="sysPrompt"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Leave blank to use the default agent prompt. Type a custom prompt here to test it on this call only — it won't change your saved settings."
+              rows={4}
+              disabled={isBlocked}
+              className="text-xs"
+            />
           </div>
           <div className="sm:col-span-2">
             <Button

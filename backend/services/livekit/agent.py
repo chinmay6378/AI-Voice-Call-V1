@@ -141,10 +141,11 @@ class VoiceCallAgent(Agent):
         phone_number: str,
         settings: Any,
         disconnect_event: asyncio.Event,
+        system_prompt_override: str | None = None,
     ) -> None:
         instructions = (
             f"ENGLISH ONLY — every reply must be in English, no exceptions, regardless of what language the customer uses.\n\n"
-            + REAL_ESTATE_PROMPT
+            + (system_prompt_override or REAL_ESTATE_PROMPT)
         )
         super().__init__(instructions=instructions)
         self.call_id = call_id
@@ -295,6 +296,7 @@ async def entrypoint(ctx: JobContext) -> None:
     call_id = metadata.get("call_id", "unknown")
     customer_name = metadata.get("customer_name", "Customer")
     phone_number = metadata.get("phone_number", "unknown")
+    system_prompt_override = metadata.get("system_prompt") or None
     # call_id is only "unknown" for calls LiveKit auto-dispatched via a
     # dispatch rule (i.e. a genuine inbound call) — our own dispatch_agent()
     # always attaches real metadata for outbound calls. Captured before the
@@ -444,6 +446,7 @@ async def entrypoint(ctx: JobContext) -> None:
             phone_number=phone_number,
             settings=settings,
             disconnect_event=disconnect_event,
+            system_prompt_override=system_prompt_override,
         )
         agent._session = session
 
