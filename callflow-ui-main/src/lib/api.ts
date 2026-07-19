@@ -3,7 +3,7 @@ import { formatDuration, formatDate } from "./mock-data";
 
 export { formatDuration, formatDate };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/+$/, "");
 
 // ── Backend response types ────────────────────────────────────────────────────
 
