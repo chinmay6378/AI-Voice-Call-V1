@@ -32,14 +32,12 @@ export default function Inbound() {
     inbound_greeting: "",
     inbound_system_prompt: "",
     inbound_livekit_trunk_id: "",
-    webhook_url: "",
   };
 
   const [config, setConfig]     = useState<InboundConfig>(defaultConfig);
   const [calls, setCalls]       = useState<Call[]>([]);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
-  const [copied, setCopied]     = useState(false);
   const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
@@ -49,14 +47,6 @@ export default function Inbound() {
     ]).then(([cfg, c]) => { setConfig(cfg); setCalls(c); })
       .finally(() => setLoading(false));
   }, []);
-
-  const copyWebhook = () => {
-    if (!config.webhook_url) return;
-    navigator.clipboard.writeText(config.webhook_url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success("Webhook URL copied");
-  };
 
   const save = async () => {
     setSaving(true);
@@ -100,7 +90,7 @@ export default function Inbound() {
           <div>
             <h2 className="text-xl font-semibold tracking-tight">Inbound Calls</h2>
             <p className="text-sm text-muted-foreground">
-              AI agent answers incoming calls on your SignalWire number
+              AI agent answers incoming calls on your Twilio number
             </p>
           </div>
         </div>
@@ -119,27 +109,15 @@ export default function Inbound() {
         </div>
       </div>
 
-      {/* ── Webhook URL ── */}
+      {/* ── How inbound routing works ── */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            Webhook URL
-            <Badge variant="outline" className="text-[10px] font-mono">POST</Badge>
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">How Inbound Calls Are Routed</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={config.webhook_url}
-              className="font-mono text-xs bg-muted/40"
-            />
-            <Button variant="outline" size="icon" onClick={copyWebhook}>
-              {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
           <p className="text-xs text-muted-foreground">
-            Paste this URL in your SignalWire phone number's Voice &amp; Fax settings as the "When a Call Comes In" webhook.
+            No webhook needed — LiveKit auto-dispatches the agent to any call arriving on your
+            configured inbound SIP trunk. This is wired up in <strong>Settings → Telephony</strong>.
           </p>
 
           {/* Setup instructions collapsible */}
@@ -154,19 +132,12 @@ export default function Inbound() {
             <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3 text-xs text-muted-foreground">
               <p className="font-semibold text-foreground">Setup checklist</p>
               <ol className="list-decimal list-inside space-y-2">
-                <li>In <strong>LiveKit Cloud</strong> → SIP → create an <strong>Inbound SIP Trunk</strong> pointing to your SignalWire DID.</li>
-                <li>Create a <strong>Dispatch Rule</strong> (Individual) so each call gets its own room. Copy the trunk ID and paste it in the field below.</li>
-                <li>In <strong>SignalWire</strong> → Phone Numbers → your DID → Voice settings → set "When a Call Comes In" to <em>Webhook</em> and paste the URL above.</li>
-                <li>Enable inbound handling using the toggle above and hit <strong>Save</strong>.</li>
+                <li>In <strong>Twilio</strong> → your SIP trunk → <strong>Origination</strong> tab → add an Origination URI pointing at your LiveKit project's inbound SIP domain.</li>
+                <li>In <strong>LiveKit Cloud</strong> → SIP → create an <strong>Inbound SIP Trunk</strong> with your Twilio number.</li>
+                <li>Copy that trunk's ID into <strong>Settings → Telephony → Inbound SIP Trunk ID</strong>.</li>
+                <li>Click <strong>Apply Inbound Rule</strong> in Settings → Telephony to wire up agent auto-dispatch.</li>
+                <li>Enable inbound handling using the toggle above and hit <strong>Save</strong> here for agent name/greeting customization.</li>
               </ol>
-              <div className="flex items-start gap-1.5 mt-2 rounded bg-primary/5 border border-primary/20 p-2">
-                <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                <span>
-                  The <strong>LiveKit SIP URI</strong> (in Settings → LiveKit SIP URI) must be set to your LiveKit SIP domain,
-                  e.g. <span className="font-mono">sip.livekit.io</span>. The webhook connects the caller to
-                  <span className="font-mono"> sip:room-name@your-sip-domain</span>.
-                </span>
-              </div>
             </div>
           )}
         </CardContent>
@@ -187,7 +158,7 @@ export default function Inbound() {
                 onChange={(e) => set("inbound_phone_number", e.target.value)}
                 className="font-mono text-sm"
               />
-              <p className="text-[10px] text-muted-foreground">Informational — the SignalWire number customers call</p>
+              <p className="text-[10px] text-muted-foreground">Informational — the Twilio number customers call</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">LiveKit Inbound Trunk ID</Label>

@@ -18,24 +18,16 @@ class Settings(BaseSettings):
     # ── Application ──────────────────────────────────────────────────────────
     app_host: str = "0.0.0.0"
     app_port: int = 8000
-    app_base_url: str = "http://localhost:8000"  # Public URL for webhooks (use ngrok in dev)
+    app_base_url: str = "http://localhost:8000"  # Public URL this app is reachable at (informational)
     debug: bool = False
     log_level: str = "INFO"
-
-    # ── SignalWire (optional — not used when LiveKit SIP initiates calls) ────────
-    signalwire_project_id: str = ""
-    signalwire_api_token: str = ""
-    signalwire_space_url: str = ""
-    signalwire_from_number: str = ""
 
     # ── LiveKit ───────────────────────────────────────────────────────────────
     livekit_url: str                   # e.g. "wss://myproject.livekit.cloud"
     livekit_api_key: str
     livekit_api_secret: str
-    livekit_sip_uri: str = ""               # Inbound SIP URI, e.g. "sip.livekit.cloud"
-    livekit_sip_trunk_id: str = ""          # Outbound SIP trunk ID (LiveKit → carrier)
-    livekit_inbound_sip_trunk_id: str = ""  # Inbound SIP trunk ID (carrier → LiveKit), e.g. "ST_a8Gf2xHxzGAX"
-    livekit_sip_username: str = ""          # SIP username used in SWML connect To: header
+    livekit_sip_trunk_id: str = ""          # Outbound SIP trunk ID (LiveKit → Twilio)
+    livekit_inbound_sip_trunk_id: str = ""  # Inbound SIP trunk ID (Twilio → LiveKit), e.g. "ST_a8Gf2xHxzGAX"
     livekit_sip_number: str = ""            # Hosted LiveKit phone number to dial FROM (bypasses sip_trunk_id)
 
     # ── Deepgram ─────────────────────────────────────────────────────────────
@@ -77,18 +69,9 @@ class Settings(BaseSettings):
     )
     voicemail_audio_url: str = ""      # Optional: URL to pre-recorded voicemail MP3
 
-    # ── Call Constraints ──────────────────────────────────────────────────────
-    # ── Telephony Provider ────────────────────────────────────────────────────────
-    telephony_provider: str = "livekit_sip"  # "livekit_sip" | "signalwire"
-
     # ── Call Constraints ──────────────────────────────────────────────────────────
     max_call_duration_seconds: int = 600     # 10-minute hard limit
     amd_timeout_seconds: int = 30            # AMD detection timeout
-
-    @field_validator("signalwire_space_url")
-    @classmethod
-    def strip_https(cls, v: str) -> str:
-        return v.removeprefix("https://").removeprefix("http://").rstrip("/")
 
     @field_validator("livekit_url")
     @classmethod

@@ -27,15 +27,6 @@ services:
       # ── Database (absolute path so it lands on the persistent disk) ──
       - key: DATABASE_URL
         value: sqlite+aiosqlite:////app/data/calls.db
-      # ── SignalWire ──
-      - key: SIGNALWIRE_PROJECT_ID
-        sync: false
-      - key: SIGNALWIRE_API_TOKEN
-        sync: false
-      - key: SIGNALWIRE_SPACE_URL
-        sync: false
-      - key: SIGNALWIRE_FROM_NUMBER
-        sync: false
       # ── LiveKit ──
       - key: LIVEKIT_URL
         sync: false
@@ -45,7 +36,7 @@ services:
         sync: false
       - key: LIVEKIT_SIP_TRUNK_ID
         sync: false
-      - key: LIVEKIT_SIP_URI
+      - key: LIVEKIT_INBOUND_SIP_TRUNK_ID
         sync: false
       # ── Deepgram ──
       - key: DEEPGRAM_API_KEY

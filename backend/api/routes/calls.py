@@ -25,7 +25,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings, get_settings
-from services.signalwire.client import SignalWireClient
 from database import (
     create_call,
     finalize_call,
@@ -73,17 +72,8 @@ def _check_credentials(settings: Settings) -> None:
     if not settings.livekit_api_key:     missing.append("LiveKit API Key")
     if not settings.livekit_api_secret:  missing.append("LiveKit API Secret")
 
-    provider = (settings.telephony_provider or "livekit_sip").lower()
-    if provider == "livekit_sip":
-        if not settings.livekit_sip_trunk_id:
-            missing.append("LiveKit SIP Trunk ID (LIVEKIT_SIP_NUMBER alone is not sufficient — a trunk ID is required)")
-    elif provider == "signalwire":
-        if not settings.signalwire_project_id: missing.append("SignalWire Project ID")
-        if not settings.signalwire_api_token:  missing.append("SignalWire API Token")
-        if not settings.signalwire_space_url:  missing.append("SignalWire Space URL")
-        if not settings.signalwire_from_number: missing.append("SignalWire From Number")
-        if not settings.app_base_url or "localhost" in settings.app_base_url:
-            missing.append("App Base URL (must be public — SignalWire webhooks need to reach it)")
+    if not settings.livekit_sip_trunk_id:
+        missing.append("LiveKit SIP Trunk ID (LIVEKIT_SIP_NUMBER alone is not sufficient — a trunk ID is required)")
 
     if missing:
         raise HTTPException(
@@ -107,14 +97,14 @@ async def start_call(
     lk: Annotated[LiveKitRoomManager, Depends(get_livekit)],
 ) -> CallStartedResponse:
     """
-    Initiate an outbound AI phone call via LiveKit SIP (Vobiz trunk).
+    Initiate an outbound AI phone call via LiveKit SIP (Twilio trunk).
 
     Flow:
       1. Guard: reject if another call is already active.
       2. Create LiveKit room.
       3. Persist call record in DB.
       4. Dispatch agent worker to LiveKit room.
-      5. LiveKit dials the customer via Vobiz SIP trunk.
+      5. LiveKit dials the customer via the Twilio SIP trunk.
       6. Return call_id immediately — the rest is async.
     """
     # 0. Pre-flight: verify all required credentials are configured
@@ -170,67 +160,28 @@ async def start_call(
             detail=f"Failed to dispatch agent: {exc}",
         )
 
-    # 4.5. Pre-create SIP dispatch rule BEFORE dialing so it's active when AMD
-    # completes (~6s later) and SignalWire sends the SIP INVITE to LiveKit.
-    # Creating it here (not in the SWML webhook) gives LiveKit's routing layer
-    # time to propagate the rule before the INVITE arrives.
-    if settings.livekit_sip_uri and (settings.telephony_provider or "livekit_sip").lower() == "signalwire":
-        try:
-            rule_id = await lk.create_call_dispatch_rule(room_name, inbound_trunk_id=settings.livekit_inbound_sip_trunk_id)
-            call.livekit_sip_rule_id = rule_id
-            await session.commit()
-            logger.info("call.dispatch_rule_created", call_id=call.id, rule_id=rule_id, room=room_name)
-        except Exception as exc:
-            logger.warning("call.dispatch_rule_create_failed", call_id=call.id, error=str(exc))
-
-    # 5. Dial customer — branch on configured telephony provider
-    provider = (settings.telephony_provider or "livekit_sip").lower()
-    logger.info("call.telephony_provider_selected", call_id=call.id, provider=provider)
-
-    if provider == "signalwire":
-        # SignalWire dials the number; on answer it hits /webhooks/swml/{call_id}
-        # which returns SWML that bridges the call into the LiveKit room.
-        sw = SignalWireClient(settings)
-        base = settings.app_base_url.rstrip("/")
-        try:
-            call_sid = await sw.create_outbound_call(
-                to=body.phone_number,
-                swml_webhook_url=f"{base}/webhooks/swml/{call.id}",
-                status_callback_url=f"{base}/webhooks/status/{call.id}",
-                amd_callback_url=f"{base}/webhooks/amd/{call.id}",
-            )
-            await update_call_sid(session, call.id, call_sid)
-            logger.info("call.initiated_signalwire", call_id=call.id, sid=call_sid, to=body.phone_number)
-        except Exception as exc:
-            logger.error("signalwire.call_failed", call_id=call.id, error=str(exc))
-            await finalize_call(session, call.id, status=CallStatus.FAILED, error_message=str(exc))
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to initiate call via SignalWire: {exc}",
-            )
-    else:
-        # LiveKit SIP — dials directly via the configured trunk/hosted number.
-        # create_sip_participant() sets wait_until_answered=True, so it blocks
-        # until the phone is genuinely answered (or the dial fails/times out) —
-        # that used to be skipped, which let the agent greet a call nobody had
-        # picked up yet. Run it in the background so /call/start still returns
-        # call_id immediately per its documented contract, instead of the
-        # request hanging for as long as the phone rings.
-        asyncio.create_task(
-            _dial_livekit_sip_background(
-                lk,
-                room_name,
-                call_id=call.id,
-                phone_number=body.phone_number,
-                customer_name=body.customer_name,
-            )
+    # 5. Dial customer via LiveKit SIP (Twilio trunk).
+    # create_sip_participant() sets wait_until_answered=True, so it blocks
+    # until the phone is genuinely answered (or the dial fails/times out) —
+    # that used to be skipped, which let the agent greet a call nobody had
+    # picked up yet. Run it in the background so /call/start still returns
+    # call_id immediately per its documented contract, instead of the
+    # request hanging for as long as the phone rings.
+    asyncio.create_task(
+        _dial_livekit_sip_background(
+            lk,
+            room_name,
+            call_id=call.id,
+            phone_number=body.phone_number,
+            customer_name=body.customer_name,
         )
-        logger.info("call.livekit_sip_dial_started", call_id=call.id, to=body.phone_number)
+    )
+    logger.info("call.livekit_sip_dial_started", call_id=call.id, to=body.phone_number)
 
     return CallStartedResponse(
         call_id=call.id,
         status=CallStatus.DIALING,
-        message=f"Outbound call to {body.phone_number} initiated via {provider}. call_id={call.id}",
+        message=f"Outbound call to {body.phone_number} initiated. call_id={call.id}",
     )
 
 

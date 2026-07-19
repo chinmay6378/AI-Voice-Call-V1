@@ -39,10 +39,10 @@ Initiate an outbound AI phone call.
 }
 ```
 
-**Error 502** — external service failure (SignalWire / LiveKit):
+**Error 502** — external service failure (LiveKit / Twilio):
 ```json
 {
-  "detail": "Failed to initiate call via SignalWire: ..."
+  "detail": "Failed to dispatch agent: ..."
 }
 ```
 
@@ -86,7 +86,6 @@ Poll the current status of a call.
   "phone_number": "+15551234567",
   "status": "in_progress",
   "answered_by": "human",
-  "signalwire_call_sid": "CA1234567890abcdef",
   "livekit_room_name": "call-3f7a2b1c",
   "created_at": "2026-01-15T10:30:00Z",
   "start_time": "2026-01-15T10:30:01Z",
@@ -102,7 +101,7 @@ Poll the current status of a call.
 | Status | Description |
 |--------|-------------|
 | `pending` | Call record created, not yet dialled |
-| `dialing` | SignalWire is placing the call |
+| `dialing` | LiveKit is placing the call via the Twilio trunk |
 | `ringing` | Customer's phone is ringing |
 | `in_progress` | Human answered, AI conversation active |
 | `voicemail` | AMD detected answering machine; voicemail left |
@@ -153,8 +152,7 @@ Get the event log for a call.
   "logs": [
     {"event": "call.created", "timestamp": "2026-01-15T10:30:00Z", "customer_name": "John Doe"},
     {"event": "call.dialing", "timestamp": "2026-01-15T10:30:01Z", "status": "dialing"},
-    {"event": "webhook.swml_received", "timestamp": "2026-01-15T10:30:05Z", "call_status": "in-progress"},
-    {"event": "amd.result", "timestamp": "2026-01-15T10:30:06Z", "answered_by": "human"},
+    {"event": "agent.sip_call_active", "timestamp": "2026-01-15T10:30:06Z"},
     {"event": "call.answered", "timestamp": "2026-01-15T10:30:08Z", "status": "in_progress"},
     {"event": "call.ended", "timestamp": "2026-01-15T10:35:22Z", "status": "completed", "duration_seconds": 314}
   ]
@@ -198,16 +196,17 @@ Health check endpoint.
 
 ---
 
-## Webhook Endpoints (SignalWire → Backend)
+## POST /call/inbound/setup
 
-These are called by SignalWire, not by your application code.
+(Re)create the LiveKit SIP dispatch rule that auto-routes inbound calls arriving
+on the configured inbound trunk to the agent — no webhook needed. Run once after
+creating/changing the inbound trunk in the LiveKit dashboard.
 
-### POST /webhooks/swml/{call_id}
-Returns SWML JSON that controls call routing (AMD → LiveKit SIP).
-
-### POST /webhooks/amd/{call_id}
-Receives async AMD result. Updates DB and handles machine detection.
-
-### POST /webhooks/status/{call_id}
-Receives call lifecycle status updates from SignalWire.
-Triggers call summary generation on completion.
+**Response 200**:
+```json
+{
+  "rule_id": "SDR_...",
+  "trunk_id": "ST_...",
+  "message": "Inbound dispatch rule created."
+}
+```

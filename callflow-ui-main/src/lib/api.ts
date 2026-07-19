@@ -273,7 +273,6 @@ export interface InboundConfig {
   inbound_greeting: string;
   inbound_system_prompt: string;
   inbound_livekit_trunk_id: string;
-  webhook_url: string;
 }
 
 export async function getInboundConfig(): Promise<InboundConfig> {

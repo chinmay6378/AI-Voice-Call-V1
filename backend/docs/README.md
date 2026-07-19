@@ -9,8 +9,8 @@ fastest way to get running, see the [root README](../../README.md).
 ## What It Does
 
 1. You POST a customer name and phone number (or use the web UI).
-2. The backend dials out via a SIP trunk (either **LiveKit-native SIP**, working
-   with any SIP carrier like Twilio, or **SignalWire's REST API**).
+2. The backend dials out via **LiveKit-native SIP**, through a SIP trunk pointing
+   at your Twilio account.
 3. A **LiveKit agent worker** joins the call once it's genuinely answered and:
    - Transcribes speech in real time with **Deepgram**.
    - Generates responses with **Groq** (Llama 3.3 70B, OpenAI-compatible API).
@@ -21,9 +21,8 @@ fastest way to get running, see the [root README](../../README.md).
 5. The full transcript, call status, and event log are stored in SQLite (or
    Postgres, via `DATABASE_URL`).
 
-Two telephony paths are supported side by side — see the root README's
-[Telephony setup](../../README.md#telephony-setup) section for how to configure
-either one.
+See the root README's [Telephony setup](../../README.md#telephony-setup) section
+for the full Twilio walkthrough.
 
 ---
 
@@ -43,7 +42,8 @@ uvicorn main:app --reload --port 8000
 This also auto-starts the LiveKit agent worker as a child process
 (`AUTO_START_AGENT=true` by default) — watch for `registered worker` in the logs.
 
-See [SETUP.md](SETUP.md) for the detailed SignalWire-specific walkthrough.
+See the root README's [Telephony setup](../../README.md#telephony-setup) section
+for the Twilio walkthrough.
 
 ---
 
@@ -76,9 +76,8 @@ See [API.md](API.md) for full request/response schemas.
 │       ├─ 1. Create LiveKit room                             │
 │       ├─ 2. Persist Call record (SQLite)                    │
 │       ├─ 3. Dispatch agent worker to room                   │
-│       └─ 4. Dial the customer (LiveKit SIP or SignalWire)    │
+│       └─ 4. Dial the customer via LiveKit SIP (Twilio trunk) │
 │                                                             │
-│  POST /webhooks/*   ← SignalWire path only                  │
 │  POST /call/inbound/setup ← one-time inbound rule setup     │
 └─────────────────────────────────────────────────────────────┘
          │
@@ -116,7 +115,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full architectural deep-dive.
 |-------|-----------|
 | Web framework | FastAPI |
 | Runtime | Python 3.12, asyncio |
-| Telephony | LiveKit SIP (any carrier) or SignalWire SIP + SWML |
+| Telephony | LiveKit SIP → Twilio trunk |
 | Real-time audio | LiveKit Agents |
 | Speech-to-text | Deepgram nova-2 |
 | Language model | Groq / Llama 3.3 70B |
@@ -147,5 +146,3 @@ Tests mock all external services — no credentials required.
   for production credentials.
 - Put the API behind a reverse proxy (the included `docker-compose.yml` uses
   Nginx via the frontend container) with TLS in front of it.
-- If using the SignalWire path, configure webhook authentication
-  (X-SignalWire-Signature) for security.

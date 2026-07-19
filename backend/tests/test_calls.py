@@ -6,7 +6,7 @@ Run:
     pytest tests/ -v
 
 These tests use an in-memory SQLite database and mock all external services
-(SignalWire, LiveKit) so they can run without credentials.
+(LiveKit) so they can run without credentials.
 """
 from __future__ import annotations
 
@@ -30,10 +30,6 @@ def anyio_backend() -> str:
 def _set_env(monkeypatch):
     """Minimal env vars so Settings doesn't raise on import."""
     env_vars = {
-        "SIGNALWIRE_PROJECT_ID": "test-project",
-        "SIGNALWIRE_API_TOKEN": "test-token",
-        "SIGNALWIRE_SPACE_URL": "test.signalwire.com",
-        "SIGNALWIRE_FROM_NUMBER": "+15550000000",
         "LIVEKIT_URL": "wss://test.livekit.cloud",
         "LIVEKIT_API_KEY": "test-key",
         "LIVEKIT_API_SECRET": "test-secret",
@@ -57,11 +53,6 @@ async def app(_set_env):
 
     with (
         patch(
-            "services.signalwire.client.SignalWireClient.create_outbound_call",
-            new_callable=AsyncMock,
-            return_value="SW_SID_TEST123",
-        ),
-        patch(
             "services.livekit.room_manager.LiveKitRoomManager.create_room",
             new_callable=AsyncMock,
             return_value="call-test1234",
@@ -74,11 +65,6 @@ async def app(_set_env):
         patch(
             "services.livekit.room_manager.LiveKitRoomManager.delete_room",
             new_callable=AsyncMock,
-        ),
-        patch(
-            "services.signalwire.client.SignalWireClient.end_call",
-            new_callable=AsyncMock,
-            return_value=True,
         ),
         patch(
             "services.livekit.room_manager.LiveKitRoomManager.remove_participant",
@@ -191,70 +177,6 @@ async def test_end_call(client):
 
     assert end.status_code == 200
     assert end.json()["status"] == CallStatus.CANCELLED
-
-
-@pytest.mark.anyio
-async def test_swml_webhook_returns_valid_swml(client):
-    async with client as c:
-        start = await c.post(
-            "/call/start",
-            json={"customer_name": "Dave", "phone_number": "+15551000004"},
-        )
-        call_id = start.json()["call_id"]
-
-        resp = await c.post(
-            f"/webhooks/swml/{call_id}",
-            data={
-                "CallSid": "CA1234567890",
-                "CallStatus": "in-progress",
-                "To": "+15551000004",
-                "From": "+15550000000",
-            },
-        )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "sections" in body
-    assert "version" in body
-    assert "main" in body["sections"]
-
-
-@pytest.mark.anyio
-async def test_amd_human_callback(client):
-    async with client as c:
-        start = await c.post(
-            "/call/start",
-            json={"customer_name": "Eve", "phone_number": "+15551000005"},
-        )
-        call_id = start.json()["call_id"]
-
-        resp = await c.post(
-            f"/webhooks/amd/{call_id}",
-            data={"CallSid": "CA_AMD_TEST", "AnsweredBy": "human"},
-        )
-        assert resp.status_code == 200
-
-        status = await c.get(f"/call/status/{call_id}")
-    assert status.json()["answered_by"] == "human"
-
-
-@pytest.mark.anyio
-async def test_amd_machine_callback(client):
-    async with client as c:
-        start = await c.post(
-            "/call/start",
-            json={"customer_name": "Frank", "phone_number": "+15551000006"},
-        )
-        call_id = start.json()["call_id"]
-
-        resp = await c.post(
-            f"/webhooks/amd/{call_id}",
-            data={"CallSid": "CA_AMD_MACHINE", "AnsweredBy": "machine_end_beep"},
-        )
-        assert resp.status_code == 200
-
-        status = await c.get(f"/call/status/{call_id}")
-    assert status.json()["status"] == CallStatus.VOICEMAIL
 
 
 @pytest.mark.anyio

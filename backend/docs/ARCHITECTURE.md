@@ -10,13 +10,12 @@ The backend consists of two cooperating processes:
 │       (main.py)                  │    │  (services/livekit/agent.py)      │
 │                                  │    │                                    │
 │  REST API  ◄── HTTP ── Clients   │    │  Subscribes to LiveKit job queue   │
-│  Webhooks  ◄── POST ── SignalWire│    │  Runs VoicePipelineAgent per call  │
-│                                  │    │                                    │
+│                                  │    │  Runs VoicePipelineAgent per call  │
 │  Depends on:                     │    │  Depends on:                       │
 │  • SQLAlchemy (async)            │    │  • livekit-agents framework        │
-│  • SignalWire client             │    │  • Deepgram STT plugin             │
-│  • LiveKit room manager          │    │  • Groq LLM (OpenAI-compat)       │
-│  • Groq (post-call summary)      │    │  • ElevenLabs TTS plugin           │
+│  • LiveKit room manager          │    │  • Deepgram STT plugin             │
+│  • Groq (post-call summary)      │    │  • Groq LLM (OpenAI-compat)       │
+│                                  │    │  • ElevenLabs TTS plugin           │
 │                                  │    │  • Silero VAD                      │
 └──────────────┬──────────────────┘    └──────────────┬───────────────────┘
                │                                        │
@@ -28,12 +27,11 @@ The backend consists of two cooperating processes:
                     │                     │
                     │  Rooms + SIP bridge │
                     └─────────┬───────────┘
-                              │ SIP / PSTN
+                              │ SIP
                     ┌─────────▼───────────┐
-                    │    SignalWire        │
+                    │       Twilio         │
                     │                     │
-                    │  PSTN gateway       │
-                    │  AMD detection      │
+                    │  SIP trunk / PSTN   │
                     └─────────┬───────────┘
                               │ PSTN
                     ┌─────────▼───────────┐
@@ -46,57 +44,45 @@ The backend consists of two cooperating processes:
 ## Call Flow — Sequence Diagram
 
 ```
-Client          FastAPI         SignalWire      LiveKit        Agent Worker    Customer
-  │                │                │              │                │              │
-  │ POST /start    │                │              │                │              │
-  │───────────────►│                │              │                │              │
-  │                │ create_room()  │              │                │              │
-  │                │───────────────────────────────►               │              │
-  │                │ ◄─────────────────────────────                │              │
-  │                │ save Call(PENDING)             │               │              │
-  │                │ dispatch_agent()               │               │              │
-  │                │───────────────────────────────►               │              │
-  │                │ ◄──────── dispatch_id ─────────               │              │
-  │                │                │              │  job dispatch  │              │
-  │                │                │              │───────────────►│              │
-  │                │ create_call()  │              │                │              │
-  │                │──────────────►│               │                │              │
-  │                │               │ dial customer  │               │              │
-  │                │               │────────────────────────────────────────────►  │
-  │ 201 call_id    │               │ (ringing)      │              │               │
-  │◄──────────────│                │               │               │              │
-  │                │               │               │               │              │
-  │                │ POST /webhooks/swml/{id}       │              │               │
-  │                │◄──────────────│               │               │              │
-  │                │ return SWML: AMD detect        │              │               │
-  │                │──────────────►│               │               │              │
-  │                │               │               │               │              │
-  │                │               │ AMD: human detected           │               │
-  │                │ POST /webhooks/amd/{id}: human │              │               │
-  │                │◄──────────────│               │               │              │
-  │                │ save answered_by=human         │              │               │
-  │                │               │               │               │              │
-  │                │               │ SIP connect → LiveKit room    │               │
-  │                │               │───────────────►               │              │
-  │                │               │               │ Customer SIP participant joins│
-  │                │               │               │───────────────►              │
-  │                │               │               │  agent connects to room      │
-  │                │               │               │◄──────────────│              │
-  │                │               │               │  greeting TTS │              │
-  │                │               │               │──────────────────────────────►
-  │                │               │               │               │ "Hello..."    │
-  │                │               │               │               │  STT stream  │
-  │                │               │               │◄─────────────────────────────│
-  │                │               │               │   "Hi there"  │              │
-  │                │               │               │  → Deepgram → Groq → ElevenLabs
-  │                │               │               │               │ TTS response  │
-  │                │               │               │──────────────────────────────►
-  │                │               │               │               │   ...         │
-  │                │               │  customer hangs up            │              │
-  │                │ POST /webhooks/status: completed              │               │
-  │                │◄──────────────│               │               │              │
-  │                │ generate summary (Groq)        │              │               │
-  │                │ finalize_call(COMPLETED)       │              │               │
+Client          FastAPI         LiveKit (Twilio trunk)     Agent Worker    Customer
+  │                │                    │                       │              │
+  │ POST /start    │                    │                       │              │
+  │───────────────►│                    │                       │              │
+  │                │ create_room()      │                       │              │
+  │                │───────────────────►│                       │              │
+  │                │ ◄──────────────────│                       │              │
+  │                │ save Call(PENDING) │                       │              │
+  │                │ dispatch_agent()   │                       │              │
+  │                │───────────────────►│                       │              │
+  │                │ ◄──── dispatch_id ─│                       │              │
+  │                │                    │  job dispatch          │              │
+  │                │                    │───────────────────────►│              │
+  │ 201 call_id    │                    │                       │              │
+  │◄───────────────│                    │                       │              │
+  │                │ create_sip_participant() (background task) │              │
+  │                │───────────────────►│                       │              │
+  │                │                    │ dial via Twilio trunk (ringing)      │
+  │                │                    │──────────────────────────────────────►
+  │                │                    │  sip.callStatus = active (answered)  │
+  │                │◄───────────────────│                       │              │
+  │                │ update_call_sid()  │                       │              │
+  │                │                    │ Customer SIP participant joins       │
+  │                │                    │───────────────────────►              │
+  │                │                    │  agent connects to room               │
+  │                │                    │◄──────────────────────│              │
+  │                │                    │  greeting TTS          │              │
+  │                │                    │───────────────────────────────────────►
+  │                │                    │                       │  "Hello..."   │
+  │                │                    │                       │  STT stream  │
+  │                │                    │◄──────────────────────────────────────│
+  │                │                    │                       │  "Hi there"   │
+  │                │                    │  → Deepgram → Groq → ElevenLabs      │
+  │                │                    │                       │ TTS response  │
+  │                │                    │───────────────────────────────────────►
+  │                │                    │                       │   ...         │
+  │                │                    │  customer hangs up    │              │
+  │                │ generate summary (Groq)                    │              │
+  │                │ finalize_call(COMPLETED)                    │              │
 ```
 
 ---
@@ -114,13 +100,11 @@ backend/
 ├── api/
 │   └── routes/
 │       ├── calls.py           # REST endpoints: /call/start, /call/end, /call/status, etc.
-│       └── webhooks.py        # SignalWire callbacks: /webhooks/swml, /amd, /status
+│       ├── inbound.py         # Inbound config CRUD + call history
+│       ├── bulk.py            # Bulk campaign upload/management
+│       └── settings_routes.py # Settings UI's persisted API keys/config
 │
 ├── services/
-│   ├── signalwire/
-│   │   ├── client.py          # Async wrapper around signalwire-python REST client
-│   │   └── swml.py            # SWML document builders (AMD routing, voicemail, hangup)
-│   │
 │   ├── livekit/
 │   │   ├── room_manager.py    # Room create, agent dispatch, SIP participant, token gen
 │   │   └── agent.py           # LiveKit worker process — VoiceCallAgent + entrypoint
@@ -158,10 +142,8 @@ The FastAPI server and the LiveKit agent worker must run separately because:
 
 In the POC, `AUTO_START_AGENT=true` spawns the worker as a child process for convenience.
 
-### 2. SWML for AMD
-SignalWire's built-in `detect` SWML verb handles answering machine detection synchronously within the call flow. This avoids the race condition between async AMD callbacks and the SWML response timing.
-
-The async AMD callback (`/webhooks/amd`) still fires and updates the DB for record-keeping.
+### 2. In-Band Voicemail/IVR Detection
+Rather than relying on carrier-side answering-machine detection, the agent listens to the first few seconds of live transcribed speech (`_VOICEMAIL_PHRASES` / `_IVR_PHRASES` in `agent.py`) and reacts accordingly — no separate AMD callback or webhook round-trip needed.
 
 ### 3. Explicit Agent Dispatch
 Instead of relying on automatic room-based dispatch, we use `AgentDispatch.create_dispatch()` with metadata. This ensures:
@@ -182,7 +164,6 @@ All database operations use SQLAlchemy 2.0 async sessions with `aiosqlite`. This
 ## Security Considerations
 
 - **No hardcoded secrets** — all credentials via environment variables.
-- **Webhook validation** — add SignalWire request signature validation before production (see `X-SignalWire-Signature` header).
 - **Input validation** — phone numbers validated as E.164; all inputs go through Pydantic.
 - **Non-root Docker** — Dockerfile creates a non-root `appuser`.
 - **CORS** — currently `allow_origins=["*"]` for development; restrict in production.
@@ -196,7 +177,6 @@ All database operations use SQLAlchemy 2.0 async sessions with `aiosqlite`. This
 | Multiple concurrent calls | Switch from one-call guard to call pool; add Redis for distributed state |
 | PostgreSQL | Change `DATABASE_URL` to `postgresql+asyncpg://...` |
 | Multiple agent workers | Deploy N agent worker containers; LiveKit distributes dispatches |
-| Webhook auth | Validate `X-SignalWire-Signature` HMAC |
 | Observability | Structured logs → OpenTelemetry → Datadog / Grafana |
-| Call recording | Use SignalWire `record` SWML verb; store URL in DB |
+| Call recording | Use LiveKit's room recording/egress API; store URL in DB |
 | Retry failed calls | Add Celery/ARQ task queue with exponential backoff |

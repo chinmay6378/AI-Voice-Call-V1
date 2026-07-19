@@ -23,9 +23,7 @@ An AI-powered voice calling platform: place and receive real phone calls where a
                                     │ SIP
                                     ▼
                     ┌─────────────────────────────┐
-                    │   Telephony carrier           │
-                    │  (Twilio / Telnyx / etc, or   │
-                    │   SignalWire)                 │
+                    │   Twilio (SIP trunk)          │
                     └───────────────┬───────────────┘
                                     │ PSTN
                                     ▼
@@ -38,7 +36,7 @@ The backend and the voice agent are two processes talking to the same LiveKit pr
 
 **Accounts** (all have free tiers to start with):
 - [LiveKit Cloud](https://cloud.livekit.io) — hosts the real-time voice agent
-- A SIP-capable telephony carrier — [Twilio](https://twilio.com) is the easiest to set up (see [Telephony setup](#telephony-setup) below), or [SignalWire](https://signalwire.com)
+- [Twilio](https://twilio.com) — telephony carrier (see [Telephony setup](#telephony-setup) below)
 - [Deepgram](https://deepgram.com) — speech-to-text
 - [Groq](https://console.groq.com) — LLM inference
 - [ElevenLabs](https://elevenlabs.io) — text-to-speech
@@ -97,10 +95,7 @@ Open the URL Vite prints (typically `http://localhost:8080`) — its dev server 
 
 ## Telephony setup
 
-You have two options for `TELEPHONY_PROVIDER` in `backend/.env` (or the Settings UI's "Active Provider" dropdown):
-
-### Option A — LiveKit-native SIP (`livekit_sip`) — recommended
-LiveKit dials out directly through a SIP trunk you configure. Works with any SIP-trunk-capable carrier.
+Twilio is the only telephony carrier this project supports — LiveKit dials out directly through a SIP trunk pointing at your Twilio account.
 
 **Twilio walkthrough** (fastest path to a working setup):
 1. Sign up at [twilio.com](https://twilio.com), buy a phone number.
@@ -115,17 +110,13 @@ For **inbound** (receiving calls on the same number):
 2. LiveKit dashboard → **Telephony → SIP trunks → Create new trunk** (Inbound): Numbers = your Twilio number.
 3. Copy that inbound trunk's ID into `LIVEKIT_INBOUND_SIP_TRUNK_ID` (or the Settings UI's "Inbound SIP Trunk ID" field), then click **Apply Inbound Rule** in the Settings UI (or `POST /call/inbound/setup`) to wire up the agent dispatch.
 
-### Option B — SignalWire (`signalwire`)
-SignalWire's REST API dials out and bridges the call into LiveKit via a webhook — includes SignalWire's own answering-machine detection. Requires `APP_BASE_URL` to be a **publicly reachable** URL (use `ngrok http 8000` for local development). See `backend/docs/SETUP.md` for the full walkthrough.
-
 ## Known limitations
 
-- LiveKit's hosted "Phone Numbers" product (buy a number directly through LiveKit) currently only supports **inbound** calling — outbound still requires a SIP trunk (Option A above), even if you also set `LIVEKIT_SIP_NUMBER`.
-- The agent's conversation prompt/personality is currently hardcoded in `backend/services/livekit/agent.py` (`REAL_ESTATE_PROMPT`) — the `AGENT_SYSTEM_PROMPT` setting exists in the Settings UI but isn't wired to it yet. `AGENT_INITIAL_GREETING` and `AGENT_VOICEMAIL_MESSAGE` *are* live-configurable.
+- LiveKit's hosted "Phone Numbers" product (buy a number directly through LiveKit) currently only supports **inbound** calling — outbound still requires a SIP trunk, even if you also set `LIVEKIT_SIP_NUMBER`.
+- The agent's default conversation prompt/personality is hardcoded in `backend/services/livekit/agent.py` (`REAL_ESTATE_PROMPT`) for campaigns/bulk calls. The Live Calls page's "System Prompt" field lets you override it for a single test call without changing this default. `AGENT_INITIAL_GREETING` and `AGENT_VOICEMAIL_MESSAGE` *are* live-configurable via Settings.
 - SQLite is fine for a single-instance/POC deployment; for production scale, swap `DATABASE_URL` for Postgres.
 
 ## More docs
 
 - `backend/docs/ARCHITECTURE.md` — full architectural deep-dive
 - `backend/docs/API.md` — API request/response schemas
-- `backend/docs/SETUP.md` — detailed SignalWire-specific setup steps

@@ -233,16 +233,12 @@ function SettingsSection({ title, description, children }: {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function Settings() {
-  const [telephonyProvider, setTelephonyProvider] = useState("livekit_sip");
-  const [theme, setTheme]                         = useState("system");
-  const [notifEnabled, setNotifEnabled]           = useState(true);
-  const [serverKeys, setServerKeys]               = useState<Record<string, string>>({});
+  const [theme, setTheme]               = useState("system");
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [serverKeys, setServerKeys]     = useState<Record<string, string>>({});
 
   useEffect(() => {
-    getConfiguredKeys().then((keys) => {
-      setServerKeys(keys);
-      if (keys["telephony_provider"]) setTelephonyProvider(keys["telephony_provider"]);
-    }).catch(() => {});
+    getConfiguredKeys().then(setServerKeys).catch(() => {});
   }, []);
 
   const sv = (key: string) => serverKeys[key];
@@ -342,45 +338,15 @@ export default function Settings() {
 
         {/* ── Telephony ── */}
         <TabsContent value="telephony" className="space-y-4">
-          <SettingsSection title="Telephony Configuration" description="SIP trunk and calling provider settings">
+          <SettingsSection title="Telephony Configuration" description="Twilio via LiveKit SIP — trunk and calling settings">
             <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Active Provider</Label>
-                  <Select
-                    value={telephonyProvider}
-                    onValueChange={(v) => {
-                      setTelephonyProvider(v);
-                      saveConfigKey("telephony_provider", v).catch(() => {});
-                    }}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="livekit_sip">LiveKit SIP (direct outbound)</SelectItem>
-                      <SelectItem value="signalwire">SignalWire (webhook/AMD pipeline)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground">
-                    {telephonyProvider === "signalwire"
-                      ? "SignalWire will dial the number. On answer, call bridges into LiveKit via your SIP URI."
-                      : "LiveKit dials directly via the SIP trunk/number configured below."}
-                  </p>
-                </div>
-              </div>
               <div className="border-t border-border pt-4 space-y-4">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">LiveKit SIP</p>
                 <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url"          backendKey="livekit_url"          serverValue={sv("livekit_url")}          placeholder="wss://project.livekit.cloud" />
                 <ApiKeyRow label="LiveKit API Key"    storageKey="livekit_api_key"      backendKey="livekit_api_key"      serverValue={sv("livekit_api_key")} />
                 <ApiKeyRow label="LiveKit API Secret" storageKey="livekit_api_secret"   backendKey="livekit_api_secret"   serverValue={sv("livekit_api_secret")} />
-                {telephonyProvider === "livekit_sip" && (
-                  <>
-                    <ApiKeyRow label="Caller ID (hosted number)" storageKey="livekit_sip_number" backendKey="livekit_sip_number" serverValue={sv("livekit_sip_number")} placeholder="+14843174088" hint="Phone number bought via LiveKit dashboard → Telephony → Phone numbers. Requires SIP Trunk ID below to also be set — LiveKit's API rejects calls without a trunk ID even when a hosted number is set." />
-                    <ApiKeyRow label="SIP Trunk ID" storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} hint="Outbound SIP trunk ID from LiveKit dashboard → Telephony → SIP trunks" />
-                  </>
-                )}
-                {telephonyProvider === "signalwire" && (
-                  <ApiKeyRow label="LiveKit SIP URI" storageKey="livekit_sip_uri" backendKey="livekit_sip_uri" serverValue={sv("livekit_sip_uri")} placeholder="sip.livekit.cloud" hint="Inbound SIP URI — SignalWire bridges the answered call here" />
-                )}
+                <ApiKeyRow label="Caller ID (hosted number)" storageKey="livekit_sip_number" backendKey="livekit_sip_number" serverValue={sv("livekit_sip_number")} placeholder="+14843174088" hint="Phone number bought via LiveKit dashboard → Telephony → Phone numbers. Requires SIP Trunk ID below to also be set — LiveKit's API rejects calls without a trunk ID even when a hosted number is set." />
+                <ApiKeyRow label="SIP Trunk ID" storageKey="livekit_sip_trunk_id" backendKey="livekit_sip_trunk_id" serverValue={sv("livekit_sip_trunk_id")} hint="Outbound SIP trunk ID from LiveKit dashboard → Telephony → SIP trunks, pointing at your Twilio trunk" />
               </div>
               <div className="border-t border-border pt-4 space-y-4">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Inbound Calls</p>
@@ -393,15 +359,6 @@ export default function Settings() {
                 />
                 <InboundDispatchRuleButton />
               </div>
-              {telephonyProvider === "signalwire" && (
-                <div className="border-t border-border pt-4 space-y-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SignalWire</p>
-                  <ApiKeyRow label="Project ID"    storageKey="sw_project_id"  backendKey="signalwire_project_id"  serverValue={sv("signalwire_project_id")} />
-                  <ApiKeyRow label="API Token"     storageKey="sw_api_token"   backendKey="signalwire_api_token"   serverValue={sv("signalwire_api_token")} />
-                  <ApiKeyRow label="Space URL"     storageKey="sw_space_url"   backendKey="signalwire_space_url"   serverValue={sv("signalwire_space_url")}  placeholder="yourspace.signalwire.com" />
-                  <ApiKeyRow label="From Number"   storageKey="sw_from_number" backendKey="signalwire_from_number" serverValue={sv("signalwire_from_number")} placeholder="+1 (415) 555-0100" />
-                </div>
-              )}
             </div>
           </SettingsSection>
         </TabsContent>
@@ -417,8 +374,6 @@ export default function Settings() {
               <ApiKeyRow label="LiveKit URL"        storageKey="livekit_url"        backendKey="livekit_url"           serverValue={sv("livekit_url")} />
               <ApiKeyRow label="LiveKit Key"        storageKey="livekit_api_key"    backendKey="livekit_api_key"       serverValue={sv("livekit_api_key")} />
               <ApiKeyRow label="LiveKit Secret"     storageKey="livekit_api_secret" backendKey="livekit_api_secret"    serverValue={sv("livekit_api_secret")} />
-              <ApiKeyRow label="SignalWire Project" storageKey="sw_project_id"      backendKey="signalwire_project_id" serverValue={sv("signalwire_project_id")} />
-              <ApiKeyRow label="SignalWire Token"   storageKey="sw_api_token"       backendKey="signalwire_api_token"  serverValue={sv("signalwire_api_token")} />
             </div>
           </SettingsSection>
         </TabsContent>

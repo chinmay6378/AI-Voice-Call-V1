@@ -4,7 +4,7 @@ LiveKit room and SIP participant management using the LiveKit Server SDK.
 Responsibilities:
   - Create rooms for each call
   - Dispatch agent workers to rooms
-  - Create SIP outbound participants (alternative to SignalWire-initiated calls)
+  - Create SIP outbound participants (dials out via the Twilio trunk)
   - Generate participant tokens for monitoring/debugging
   - Clean up rooms on call end
 """
@@ -101,8 +101,7 @@ class LiveKitRoomManager:
         call_id: str,
     ) -> str:
         """
-        Alternative call initiation path: LiveKit creates the outbound SIP call
-        directly (bypassing SignalWire's REST API).
+        LiveKit creates the outbound SIP call directly via the Twilio trunk.
 
         Requires an outbound SIP trunk (LIVEKIT_SIP_TRUNK_ID) configured in the
         LiveKit dashboard — confirmed via a live test that LiveKit's server
@@ -123,8 +122,8 @@ class LiveKitRoomManager:
         sip_number = self._settings.livekit_sip_number
         if not sip_trunk_id:
             raise RuntimeError(
-                "LIVEKIT_SIP_TRUNK_ID is not configured — "
-                "set it in .env or use the SignalWire-initiated call path."
+                "LIVEKIT_SIP_TRUNK_ID is not configured — set it in .env "
+                "to your Twilio outbound trunk ID."
             )
 
         request_kwargs: dict[str, Any] = dict(
@@ -182,7 +181,7 @@ class LiveKitRoomManager:
 
             # No trunk_ids filter — matching all trunks is required.
             # With trunk_ids set, LiveKit rejects in ~2s because it can't
-            # attribute the incoming SignalWire SIP INVITE to that specific
+            # attribute the incoming Twilio SIP INVITE to that specific
             # trunk ID. Without the filter, LiveKit finds the rule and
             # processes the INVITE into the room (4-5s path, closer to working).
             req = sip_proto.CreateSIPDispatchRuleRequest(

@@ -568,17 +568,7 @@ function Step5({ form, set }: { form: typeof DEFAULTS; set: (k: keyof typeof DEF
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Telephony Provider</Label>
-          <Select value={form.telephonyProvider} onValueChange={(v) => set("telephonyProvider", v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="livekit_sip">LiveKit SIP</SelectItem>
-              <SelectItem value="signalwire">SignalWire</SelectItem>
-              <SelectItem value="twilio">Twilio</SelectItem>
-              <SelectItem value="plivo">Plivo</SelectItem>
-              <SelectItem value="vobiz">Vobiz</SelectItem>
-              <SelectItem value="custom_sip">Custom SIP</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input value="Twilio (via LiveKit SIP)" disabled className="text-sm text-muted-foreground" />
         </div>
         <div className="space-y-1.5">
           <Label>Caller ID</Label>
@@ -627,8 +617,6 @@ function Step6() {
     { label: "LiveKit URL",           key: "livekit_url",  placeholder: "wss://your-project.livekit.cloud" },
     { label: "LiveKit API Key",       key: "livekit_key",  placeholder: "API••••••••••" },
     { label: "LiveKit Secret",        key: "livekit_sec",  placeholder: "••••••••••••" },
-    { label: "SignalWire Project ID", key: "sw_project",   placeholder: "••••••••••••" },
-    { label: "SignalWire Token",      key: "sw_token",     placeholder: "PT••••••••••••" },
   ];
 
   return (

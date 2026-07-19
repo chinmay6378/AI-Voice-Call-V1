@@ -28,7 +28,6 @@ from database.repository import (
     get_call,
 )
 from services.livekit.room_manager import LiveKitRoomManager
-from services.signalwire.client import SignalWireClient
 from utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -204,30 +203,15 @@ async def _make_call(
         phone_number=phone_number,
     )
 
-    provider = (settings.telephony_provider or "livekit_sip").lower()
-
-    if provider == "signalwire":
-        sw = SignalWireClient(settings)
-        base = settings.app_base_url.rstrip("/")
-        call_sid = await sw.create_outbound_call(
-            to=phone_number,
-            swml_webhook_url=f"{base}/webhooks/swml/{call_id}",
-            status_callback_url=f"{base}/webhooks/status/{call_id}",
-            amd_callback_url=f"{base}/webhooks/amd/{call_id}",
-        )
-        async for session in get_session():
-            await update_call_sid(session, call_id, call_sid)
-            break
-    else:
-        participant_id = await lk.create_sip_participant(
-            room_name,
-            phone_number=phone_number,
-            customer_name=customer_name,
-            call_id=call_id,
-        )
-        async for session in get_session():
-            await update_call_sid(session, call_id, participant_id)
-            break
+    participant_id = await lk.create_sip_participant(
+        room_name,
+        phone_number=phone_number,
+        customer_name=customer_name,
+        call_id=call_id,
+    )
+    async for session in get_session():
+        await update_call_sid(session, call_id, participant_id)
+        break
 
     return call_id
 

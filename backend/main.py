@@ -2,7 +2,7 @@
 AI Voice Call Backend — FastAPI application entry point.
 
 Processes:
-  1. FastAPI server   — REST API + SignalWire webhooks (this file)
+  1. FastAPI server   — REST API (this file)
   2. Agent worker     — LiveKit agent (services/livekit/agent.py)
 
 Run in development:
@@ -33,7 +33,6 @@ from api.routes.bulk import router as bulk_router
 from api.routes.calls import router as call_router, _active_router as active_router
 from api.routes.inbound import router as inbound_router
 from api.routes.settings_routes import router as settings_router
-from api.routes.webhooks import router as webhook_router
 from config.settings import apply_db_overrides, get_settings
 from database.repository import close_db, get_all_db_settings, get_session, init_db
 from services.campaign_runner import resume_running_campaigns
@@ -119,7 +118,7 @@ app = FastAPI(
     title="AI Voice Call Agent",
     description=(
         "Backend for making AI-powered outbound phone calls using "
-        "SignalWire SIP, LiveKit, Deepgram STT, Groq LLM, and ElevenLabs TTS."
+        "Twilio SIP (via LiveKit), Deepgram STT, Groq LLM, and ElevenLabs TTS."
     ),
     version="1.0.0",
     docs_url="/docs",
@@ -139,7 +138,6 @@ app.add_middleware(
 
 app.include_router(call_router)
 app.include_router(active_router)
-app.include_router(webhook_router)
 app.include_router(bulk_router)
 app.include_router(settings_router)
 app.include_router(inbound_router)
@@ -173,7 +171,7 @@ async def health() -> HealthResponse:
         svc("Deepgram", "Speech-to-text transcription", bool(settings.deepgram_api_key)),
         svc("Groq", "LLM inference for dialogue", bool(settings.groq_api_key)),
         svc("ElevenLabs", "Text-to-speech synthesis", bool(settings.elevenlabs_api_key)),
-        svc("Vobiz SIP Trunk", "Indian telephony SIP trunk", bool(settings.livekit_sip_trunk_id)),
+        svc("Twilio SIP Trunk", "Outbound/inbound telephony via LiveKit SIP", bool(settings.livekit_sip_trunk_id)),
     ]
 
     if _agent_proc is not None:
