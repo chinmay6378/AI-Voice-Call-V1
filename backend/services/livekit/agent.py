@@ -42,6 +42,7 @@ from database.repository import (
     finalize_call,
     get_all_db_settings,
     get_call,
+    get_inbound_config,
     get_session,
     init_db,
     mark_call_answered,
@@ -143,6 +144,9 @@ class VoiceCallAgent(Agent):
         settings: Any,
         disconnect_event: asyncio.Event,
         system_prompt_override: str | None = None,
+        greeting_override: str | None = None,
+        agent_name_override: str | None = None,
+        company_name_override: str | None = None,
     ) -> None:
         instructions = (
             f"ENGLISH ONLY — every reply must be in English, no exceptions, regardless of what language the customer uses.\n\n"
@@ -152,6 +156,9 @@ class VoiceCallAgent(Agent):
         self.call_id = call_id
         self.customer_name = customer_name
         self._settings = settings
+        self._greeting_override = greeting_override
+        self._agent_name_override = agent_name_override
+        self._company_name_override = company_name_override
         self._session: AgentSession | None = None
         self._disconnect_event = disconnect_event
         self._hangup_scheduled = False
@@ -176,10 +183,10 @@ class VoiceCallAgent(Agent):
             return
 
         greeting = (
-            self._settings.agent_initial_greeting
+            (self._greeting_override or self._settings.agent_initial_greeting)
             .replace("{customer_name}", self.customer_name)
-            .replace("{agent_name}", self._settings.agent_name)
-            .replace("{company_name}", self._settings.company_name)
+            .replace("{agent_name}", self._agent_name_override or self._settings.agent_name)
+            .replace("{company_name}", self._company_name_override or self._settings.company_name)
         )
         logger.info("agent.saying_greeting", call_id=self.call_id, greeting=greeting[:60])
         await self.session.say(greeting, allow_interruptions=True)
@@ -392,6 +399,25 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception as exc:
             logger.error("agent.inbound_call_create_failed", error=str(exc))
 
+    # Inbound calls have their own persona configured on the Inbound page —
+    # separate from the outbound REAL_ESTATE_PROMPT/greeting defaults. Without
+    # this, inbound calls silently used the outbound sales script regardless
+    # of what was saved in Settings.
+    greeting_override: str | None = None
+    agent_name_override: str | None = None
+    company_name_override: str | None = None
+    if is_inbound_call:
+        try:
+            async for session in get_session():
+                inbound_cfg = await get_inbound_config(session)
+                break
+            system_prompt_override = inbound_cfg.get("inbound_system_prompt") or None
+            greeting_override = inbound_cfg.get("inbound_greeting") or None
+            agent_name_override = inbound_cfg.get("inbound_agent_name") or None
+            company_name_override = inbound_cfg.get("inbound_company_name") or None
+        except Exception as exc:
+            logger.error("agent.inbound_config_load_failed", error=str(exc))
+
     # Update DB: call is now in progress
     await _mark_in_progress(call_id)
 
@@ -448,6 +474,9 @@ async def entrypoint(ctx: JobContext) -> None:
             settings=settings,
             disconnect_event=disconnect_event,
             system_prompt_override=system_prompt_override,
+            greeting_override=greeting_override,
+            agent_name_override=agent_name_override,
+            company_name_override=company_name_override,
         )
         agent._session = session
 

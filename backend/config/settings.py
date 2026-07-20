@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # ── ElevenLabs ───────────────────────────────────────────────────────────
     elevenlabs_api_key: str
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"   # Rachel (default)
-    elevenlabs_model_id: str = "eleven_turbo_v2_5"
+    elevenlabs_model_id: str = "eleven_multilingual_v2"
 
     # ── Database ─────────────────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./data/calls.db"
