@@ -35,11 +35,12 @@ from livekit.agents import (
 from livekit.plugins import deepgram, elevenlabs, openai as lk_openai
 from livekit.agents.utils.participant import wait_for_participant_attribute
 
-from config.settings import get_settings
+from config.settings import apply_db_overrides, get_settings
 from database.repository import (
     append_transcript_entry,
     create_call,
     finalize_call,
+    get_all_db_settings,
     get_call,
     get_session,
     init_db,
@@ -583,7 +584,28 @@ async def _end_call_db(
 
 # ── Worker startup ────────────────────────────────────────────────────────────
 
+async def _load_db_overrides() -> None:
+    """
+    Apply any settings saved through the Settings UI before this worker
+    connects to LiveKit. start.sh launches this process independently of
+    main.py's FastAPI lifespan (which is where apply_db_overrides() normally
+    runs), so without this the worker would silently only ever see raw
+    .env/container values and never pick up UI-saved credentials — even
+    across restarts.
+    """
+    try:
+        await init_db(get_settings().database_url)
+        async for db in get_session():
+            db_overrides = await get_all_db_settings(db)
+            if db_overrides:
+                apply_db_overrides(db_overrides)
+            break
+    except Exception as exc:
+        print(f">>> Failed to load DB setting overrides: {exc}", flush=True)
+
+
 if __name__ == "__main__":
+    asyncio.run(_load_db_overrides())
     _s = get_settings()
     cli.run_app(
         WorkerOptions(
