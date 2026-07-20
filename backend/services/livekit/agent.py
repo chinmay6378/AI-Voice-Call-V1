@@ -147,6 +147,7 @@ class VoiceCallAgent(Agent):
         greeting_override: str | None = None,
         agent_name_override: str | None = None,
         company_name_override: str | None = None,
+        is_inbound: bool = False,
     ) -> None:
         instructions = (
             f"ENGLISH ONLY — every reply must be in English, no exceptions, regardless of what language the customer uses.\n\n"
@@ -159,6 +160,7 @@ class VoiceCallAgent(Agent):
         self._greeting_override = greeting_override
         self._agent_name_override = agent_name_override
         self._company_name_override = company_name_override
+        self._is_inbound = is_inbound
         self._session: AgentSession | None = None
         self._disconnect_event = disconnect_event
         self._hangup_scheduled = False
@@ -172,12 +174,16 @@ class VoiceCallAgent(Agent):
         # Voicemail/IVR greetings start within ~0.5s of connect, so Deepgram
         # will transcribe them and on_user_turn_completed sets _machine_detected_event
         # before we get here after the wait — allowing us to skip the greeting entirely.
-        try:
-            await asyncio.wait_for(self._machine_detected_event.wait(), timeout=2.0)
-            logger.info("agent.machine_detected_pre_greeting", call_id=self.call_id)
-            return  # llm_node will deliver the canned machine message
-        except asyncio.TimeoutError:
-            pass
+        # Only meaningful for OUTBOUND calls (detecting a machine on the callee's
+        # end) — an inbound caller dialed in on purpose, so this would just add
+        # 2s of dead air before they hear anything.
+        if not self._is_inbound:
+            try:
+                await asyncio.wait_for(self._machine_detected_event.wait(), timeout=2.0)
+                logger.info("agent.machine_detected_pre_greeting", call_id=self.call_id)
+                return  # llm_node will deliver the canned machine message
+            except asyncio.TimeoutError:
+                pass
 
         if self._hangup_scheduled:
             return
@@ -477,6 +483,7 @@ async def entrypoint(ctx: JobContext) -> None:
             greeting_override=greeting_override,
             agent_name_override=agent_name_override,
             company_name_override=company_name_override,
+            is_inbound=is_inbound_call,
         )
         agent._session = session
 
