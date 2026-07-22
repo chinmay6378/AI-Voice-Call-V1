@@ -36,6 +36,7 @@ def _set_env(monkeypatch):
         "DEEPGRAM_API_KEY": "test-deepgram",
         "GROQ_API_KEY": "test-groq",
         "ELEVENLABS_API_KEY": "test-eleven",
+        "LIVEKIT_SIP_TRUNK_ID": "ST_test1234",
         "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
         "APP_BASE_URL": "http://testserver",
         "AUTO_START_AGENT": "false",
