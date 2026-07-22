@@ -70,7 +70,7 @@ To stop everything: `docker compose down`. Your call history/database persists i
 
 ## Quickstart (manual / local dev, no Docker)
 
-**Backend:**
+**Backend** (see also [backend/README.md](backend/README.md)):
 ```bash
 cd backend
 python -m venv .venv
@@ -85,13 +85,25 @@ uvicorn main:app --reload --port 8000
 ```
 This single command also starts the LiveKit agent worker as a child process (`AUTO_START_AGENT=true` by default). Watch the terminal for `registered worker` — that confirms the agent connected to LiveKit successfully.
 
-**Frontend** (in a second terminal):
+**Verify the backend is up**, in a second terminal:
+```bash
+curl http://localhost:8000/health
+```
+Should return `{"status":"ok", ...}` with every listed service showing `"healthy"`.
+
+**Frontend** (in a third terminal, see also [callflow-ui-main/README.md](callflow-ui-main/README.md)):
 ```bash
 cd callflow-ui-main
 npm install
 npm run dev
 ```
 Open the URL Vite prints (typically `http://localhost:8080`) — its dev server already proxies API calls to `http://localhost:8000` automatically, no `.env` needed for local dev.
+
+**Run the backend tests** (optional sanity check — no credentials needed, everything's mocked):
+```bash
+cd backend
+pytest tests/ -v
+```
 
 ## Telephony setup
 
@@ -106,9 +118,14 @@ Twilio is the only telephony carrier this project supports — LiveKit dials out
 6. Copy the new trunk's ID into `LIVEKIT_SIP_TRUNK_ID` (or the Settings UI's "SIP Trunk ID" field).
 
 For **inbound** (receiving calls on the same number):
-1. Twilio trunk → **Origination** tab → add an Origination URI pointing at your LiveKit project's inbound SIP domain (LiveKit dashboard → Telephony → SIP trunks → your Inbound trunk's URI, e.g. `sip:xxxxx.sip.livekit.cloud`).
-2. LiveKit dashboard → **Telephony → SIP trunks → Create new trunk** (Inbound): Numbers = your Twilio number.
-3. Copy that inbound trunk's ID into `LIVEKIT_INBOUND_SIP_TRUNK_ID` (or the Settings UI's "Inbound SIP Trunk ID" field), then click **Apply Inbound Rule** in the Settings UI (or `POST /call/inbound/setup`) to wire up the agent dispatch.
+1. Find your LiveKit project's SIP URI: LiveKit dashboard → **Telephony → SIP trunks** (shown at the top of that page, e.g. `sip:xxxxx.sip.livekit.cloud`) — this is a per-project value, the same regardless of which trunk you create.
+2. Twilio trunk → **Origination** tab → add an Origination URI with `;transport=tcp` appended: `sip:xxxxx.sip.livekit.cloud;transport=tcp`. Without the transport suffix, inbound calls can fail or behave unpredictably.
+3. LiveKit dashboard → **Telephony → SIP trunks → Create new trunk** (Inbound): Numbers = your Twilio number.
+4. Copy that inbound trunk's ID into `LIVEKIT_INBOUND_SIP_TRUNK_ID` (or the Settings UI's "Inbound SIP Trunk ID" field), then click **Apply Inbound Rule** in the Settings UI (or `POST /call/inbound/setup`) to wire up the agent dispatch.
+
+Two Twilio-side gotchas worth checking if calls fail with a permission/auth error:
+- **Trial accounts** cannot use Elastic SIP Trunking at all until upgraded — this is separate from (and in addition to) the "verified caller ID" restriction.
+- **Geographic Permissions** (Console → Voice → Settings → Geo Permissions) block calling countries that aren't explicitly enabled, on every account tier — upgrading out of trial does not auto-enable this.
 
 ## Known limitations
 
@@ -118,5 +135,7 @@ For **inbound** (receiving calls on the same number):
 
 ## More docs
 
+- [backend/README.md](backend/README.md) — backend-specific setup and testing
+- [callflow-ui-main/README.md](callflow-ui-main/README.md) — frontend-specific setup and building
 - `backend/docs/ARCHITECTURE.md` — full architectural deep-dive
 - `backend/docs/API.md` — API request/response schemas
