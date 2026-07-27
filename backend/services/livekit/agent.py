@@ -536,7 +536,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
             logger.info("call.sip_reason_check", call_id=call_id, sip_reason=sip_reason or "none")
 
-            if "USER_REJECTED" in sip_reason or "USER_UNAVAILABLE" in sip_reason:
+            if "USER_REJECTED" in sip_reason:
+                # LiveKit's DisconnectReason docs define USER_REJECTED as the
+                # callee explicitly rejecting the call (busy), distinct from
+                # USER_UNAVAILABLE (no response in time).
+                end_status = CallStatus.BUSY
+                logger.info("call.status_from_sip", call_id=call_id, reason=sip_reason, mapped="busy")
+            elif "USER_UNAVAILABLE" in sip_reason:
                 end_status = CallStatus.NO_ANSWER
                 logger.info("call.status_from_sip", call_id=call_id, reason=sip_reason, mapped="no_answer")
             elif "SIP_TRUNK_FAILURE" in sip_reason:
