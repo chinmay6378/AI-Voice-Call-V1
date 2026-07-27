@@ -57,10 +57,22 @@ export default function CallDetails() {
           <span><strong>Voicemail detected.</strong> Agent left a voicemail message and ended the call.</span>
         </div>
       )}
-      {call.status === "no_answer" && (
+      {call.status === "ivr" && (
         <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           <PhoneOff className="h-4 w-4 shrink-0" />
           <span><strong>IVR / Machine detected.</strong> Agent detected an automated system and ended the call.</span>
+        </div>
+      )}
+      {call.status === "no_answer" && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          <PhoneOff className="h-4 w-4 shrink-0" />
+          <span><strong>No answer.</strong> The call wasn't picked up.</span>
+        </div>
+      )}
+      {call.status === "busy" && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          <PhoneOff className="h-4 w-4 shrink-0" />
+          <span><strong>Line busy.</strong> The number was busy.</span>
         </div>
       )}
       {call.status === "failed" && call.errorMessage && (

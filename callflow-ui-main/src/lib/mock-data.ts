@@ -1,6 +1,6 @@
 export type CallStatus =
   | "queued" | "dialing" | "ringing" | "connected"
-  | "completed" | "voicemail" | "no_answer" | "busy"
+  | "completed" | "voicemail" | "no_answer" | "busy" | "ivr"
   | "failed" | "cancelled";
 
 export const CALL_STATES: CallStatus[] = ["queued", "dialing", "ringing", "connected", "completed"];

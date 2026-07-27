@@ -197,6 +197,36 @@ class VoiceCallAgent(Agent):
         logger.info("agent.saying_greeting", call_id=self.call_id, greeting=greeting[:60])
         await self.session.say(greeting, allow_interruptions=True)
 
+    def _check_machine_phrases(self, text: str, *, source: str) -> None:
+        """Check callee-side speech for IVR/voicemail cues.
+
+        Called from both the low-latency interim-transcript hook and the
+        finalized-turn hook. Short voicemail greetings are often cut off by
+        the mailbox hanging up before LiveKit ever finalizes a turn boundary
+        (on_user_turn_completed only fires on that finalized boundary), so
+        relying on that alone misses greetings shorter than the pause needed
+        for VAD to mark end-of-turn.
+        """
+        if self._hangup_scheduled or self._machine_type is not None or not text:
+            return
+        lower = text.lower()
+        if any(p in lower for p in _IVR_PHRASES):
+            logger.info("amd.ivr_detected", call_id=self.call_id, text=text[:80], source=source)
+            self._machine_type = "ivr"
+            self._call_end_status = CallStatus.IVR
+            self._machine_detected_event.set()
+        elif any(p in lower for p in _VOICEMAIL_PHRASES):
+            logger.info("amd.voicemail_detected", call_id=self.call_id, text=text[:80], source=source)
+            self._machine_type = "voicemail"
+            self._call_end_status = CallStatus.VOICEMAIL
+            self._machine_detected_event.set()
+
+    def _on_user_input_transcribed(self, ev: Any) -> None:
+        """Fires on every interim AND final STT chunk — much lower latency
+        than on_user_turn_completed for catching short machine greetings."""
+        text = getattr(ev, "transcript", "") or ""
+        self._check_machine_phrases(text, source="interim")
+
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
@@ -205,21 +235,8 @@ class VoiceCallAgent(Agent):
             logger.info("transcript.user", call_id=self.call_id, text=text)
             await _save_transcript(self.call_id, "customer", text)
 
-            # ── Machine / voicemail detection ────────────────────────────────
-            # Check the transcribed speech from the other end for machine cues.
             # Must run before llm_node so the flag is set in time to intercept.
-            if not self._hangup_scheduled and self._machine_type is None:
-                lower = text.lower()
-                if any(p in lower for p in _IVR_PHRASES):
-                    logger.info("amd.ivr_detected", call_id=self.call_id, text=text[:80])
-                    self._machine_type = "ivr"
-                    self._call_end_status = CallStatus.NO_ANSWER
-                    self._machine_detected_event.set()
-                elif any(p in lower for p in _VOICEMAIL_PHRASES):
-                    logger.info("amd.voicemail_detected", call_id=self.call_id, text=text[:80])
-                    self._machine_type = "voicemail"
-                    self._call_end_status = CallStatus.VOICEMAIL
-                    self._machine_detected_event.set()
+            self._check_machine_phrases(text, source="final_turn")
 
         # Inject English-only rule directly into the turn context — this IS
         # the chat_ctx that llm_node receives, so it's guaranteed to reach the LLM.
@@ -488,6 +505,7 @@ async def entrypoint(ctx: JobContext) -> None:
         agent._session = session
 
         session.on("conversation_item_added", agent._on_conversation_item_added)
+        session.on("user_input_transcribed", agent._on_user_input_transcribed)
 
         await session.start(agent, room=ctx.room, record=False)
         logger.info("agent.session_started", call_id=call_id)

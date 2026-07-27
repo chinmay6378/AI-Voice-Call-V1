@@ -24,7 +24,7 @@ import type { Call } from "@/lib/mock-data";
 import { formatDate, formatDuration } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-const STATUS_OPTIONS = ["all","connected","completed","voicemail","no_answer","busy","failed","dialing","ringing","cancelled"];
+const STATUS_OPTIONS = ["all","connected","completed","voicemail","no_answer","busy","ivr","failed","dialing","ringing","cancelled"];
 const ACTIVE_STATUSES = new Set(["connected","dialing","ringing"]);
 const AUTO_REFRESH_MS = 5000;
 
@@ -84,7 +84,7 @@ export default function CallResults() {
     total:     filtered.length,
     completed: filtered.filter((c) => c.status === "completed").length,
     voicemail: filtered.filter((c) => c.status === "voicemail").length,
-    no_answer: filtered.filter((c) => ["no_answer","busy","failed"].includes(c.status)).length,
+    no_answer: filtered.filter((c) => ["no_answer","busy","ivr","failed"].includes(c.status)).length,
     active:    filtered.filter((c) => ACTIVE_STATUSES.has(c.status)).length,
   };
 
@@ -291,6 +291,9 @@ function DispositionBadge({ status, hasSummary, errorMessage }: { status: string
   );
   if (status === "busy") return (
     <Badge variant="outline" className="border-border bg-muted/50 text-muted-foreground text-[10px]">Busy</Badge>
+  );
+  if (status === "ivr") return (
+    <Badge variant="outline" className="border-border bg-muted/50 text-muted-foreground text-[10px]">IVR Detected</Badge>
   );
   if (status === "cancelled") return (
     <Badge variant="outline" className="border-border text-muted-foreground text-[10px]">Cancelled</Badge>

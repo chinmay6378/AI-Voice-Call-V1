@@ -47,6 +47,7 @@ const STATUS_MAP: Record<string, CallStatus> = {
   failed:      "failed",
   no_answer:   "no_answer",
   busy:        "busy",
+  ivr:         "ivr",
   cancelled:   "cancelled",
 };
 

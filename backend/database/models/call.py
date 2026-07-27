@@ -21,6 +21,7 @@ class CallStatus(str, Enum):
     FAILED = "failed"
     NO_ANSWER = "no_answer"
     BUSY = "busy"
+    IVR = "ivr"
     CANCELLED = "cancelled"
 
 

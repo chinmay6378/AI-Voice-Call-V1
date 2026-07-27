@@ -14,6 +14,7 @@ const styles: Record<string, string> = {
   voicemail:   "bg-warning/15 text-warning border-warning/30",
   no_answer:   "bg-muted/60 text-muted-foreground border-border",
   busy:        "bg-muted/60 text-muted-foreground border-border",
+  ivr:         "bg-muted/60 text-muted-foreground border-border",
   failed:      "bg-destructive/10 text-destructive border-destructive/30",
   cancelled:   "bg-muted text-muted-foreground border-border",
 };
@@ -23,6 +24,7 @@ const dotStyles: Record<string, string> = {
   voicemail:   "bg-warning",
   no_answer:   "bg-muted-foreground",
   busy:        "bg-muted-foreground",
+  ivr:         "bg-muted-foreground",
   failed:      "bg-destructive",
   connected:   "bg-primary animate-pulse",
   in_progress: "bg-primary animate-pulse",
@@ -36,6 +38,7 @@ const dotStyles: Record<string, string> = {
 const LABELS: Record<string, string> = {
   no_answer: "No Answer",
   in_progress: "In Progress",
+  ivr: "IVR Detected",
 };
 
 export function StatusBadge({ status, className }: { status: AnyStatus; className?: string }) {
