@@ -27,10 +27,11 @@ const BACKEND_TO_STEP: Record<string, Step> = {
   failed:      "completed",
   no_answer:   "completed",
   busy:        "completed",
+  ivr:         "completed",
   cancelled:   "completed",
 };
 
-const TERMINAL = new Set(["completed", "voicemail", "failed", "no_answer", "busy", "cancelled"]);
+const TERMINAL = new Set(["completed", "voicemail", "failed", "no_answer", "busy", "ivr", "cancelled"]);
 
 export function LiveCallPanel({ active, callId, onCallEnded }: Props) {
   const [stepIdx, setStepIdx] = useState(0);

@@ -24,6 +24,8 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
   failed:    <XCircle className="h-3.5 w-3.5 text-destructive" />,
   no_answer: <PhoneMissed className="h-3.5 w-3.5 text-orange-400" />,
   busy:      <PhoneOff className="h-3.5 w-3.5 text-yellow-500" />,
+  ivr:       <PhoneOff className="h-3.5 w-3.5 text-yellow-500" />,
+  voicemail: <PhoneMissed className="h-3.5 w-3.5 text-orange-400" />,
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -33,6 +35,8 @@ const STATUS_LABEL: Record<string, string> = {
   failed:    "Failed",
   no_answer: "No Answer",
   busy:      "Busy",
+  ivr:       "IVR Detected",
+  voicemail: "Voicemail",
 };
 
 function ContactRow({ contact, current }: { contact: CampaignContact; current: boolean }) {

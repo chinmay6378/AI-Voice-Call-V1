@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     # ── ElevenLabs ───────────────────────────────────────────────────────────
     elevenlabs_api_key: str
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"   # Rachel (default)
-    elevenlabs_model_id: str = "eleven_multilingual_v2"
+    # flash_v2_5 trades a little quality for much lower per-sentence latency
+    # (~75ms model time vs multilingual_v2's ~300ms+) — worth it for live phone calls.
+    elevenlabs_model_id: str = "eleven_flash_v2_5"
 
     # ── Database ─────────────────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./data/calls.db"

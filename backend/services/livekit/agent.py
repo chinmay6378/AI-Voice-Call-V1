@@ -483,10 +483,19 @@ async def entrypoint(ctx: JobContext) -> None:
                 api_key=settings.elevenlabs_api_key,
                 voice_id=settings.elevenlabs_voice_id,
                 model=settings.elevenlabs_model_id,
-                streaming_latency=3,
+                streaming_latency=4,
+                voice_settings=elevenlabs.VoiceSettings(
+                    # Lower stability = more natural pitch/pace variation instead of
+                    # a flat, robotic-sounding read; similarity_boost keeps it close
+                    # to the source voice while style adds light conversational lift.
+                    stability=0.45,
+                    similarity_boost=0.8,
+                    style=0.25,
+                    use_speaker_boost=True,
+                ),
             ),
             allow_interruptions=True,
-            min_endpointing_delay=0.5,
+            min_endpointing_delay=0.4,
             user_away_timeout=None,   # disable — stops LLM from generating unprompted "how can I help you?" on silence
         )
 
