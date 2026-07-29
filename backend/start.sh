@@ -6,6 +6,9 @@ echo "[start.sh] Starting agent worker..."
 python services/livekit/agent.py start &
 AGENT_PID=$!
 echo "[start.sh] Agent worker PID: $AGENT_PID"
+# FastAPI runs as a separate process (not a child of this shell), so it can't
+# see $AGENT_PID directly — /health reads this file to check liveness instead.
+echo "$AGENT_PID" > /tmp/agent_worker.pid
 
 # Start the FastAPI server in the background too (not exec'd) so we can
 # detect either process dying.

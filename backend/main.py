@@ -177,7 +177,23 @@ async def health() -> HealthResponse:
     if _agent_proc is not None:
         worker_status = "healthy" if _agent_proc.poll() is None else "crashed"
     else:
-        worker_status = "external (AUTO_START_AGENT=false — verify it's running yourself)"
+        # AUTO_START_AGENT=false (the Docker path): start.sh launches the agent
+        # as an independent sibling process, so this FastAPI process never got
+        # a subprocess.Popen handle for it. Both processes share the same
+        # container/PID namespace though, so start.sh drops the PID in a file
+        # we can check for liveness instead of just guessing "healthy".
+        worker_status = "unknown — no PID file found (agent not started via start.sh?)"
+        try:
+            with open("/tmp/agent_worker.pid") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)   # raises if the PID doesn't exist; doesn't actually signal it
+            worker_status = "healthy"
+        except ProcessLookupError:
+            worker_status = "crashed"
+        except FileNotFoundError:
+            pass
+        except (ValueError, PermissionError):
+            pass
     services.append(
         ServiceStatus(
             name="LiveKit Agent Worker",
