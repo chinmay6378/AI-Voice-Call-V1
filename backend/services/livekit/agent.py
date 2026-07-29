@@ -483,7 +483,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 api_key=settings.elevenlabs_api_key,
                 voice_id=settings.elevenlabs_voice_id,
                 model=settings.elevenlabs_model_id,
-                streaming_latency=4,
+                streaming_latency=3,
                 voice_settings=elevenlabs.VoiceSettings(
                     # Lower stability = more natural pitch/pace variation instead of
                     # a flat, robotic-sounding read; similarity_boost keeps it close
