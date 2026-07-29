@@ -130,7 +130,7 @@ Two Twilio-side gotchas worth checking if calls fail with a permission/auth erro
 ## Known limitations
 
 - LiveKit's hosted "Phone Numbers" product (buy a number directly through LiveKit) currently only supports **inbound** calling — outbound still requires a SIP trunk, even if you also set `LIVEKIT_SIP_NUMBER`.
-- The agent's default conversation prompt/personality is hardcoded in `backend/services/livekit/agent.py` (`REAL_ESTATE_PROMPT`) for campaigns/bulk calls. The Live Calls page's "System Prompt" field lets you override it for a single test call without changing this default. `AGENT_INITIAL_GREETING` and `AGENT_VOICEMAIL_MESSAGE` *are* live-configurable via Settings.
+- The agent's default conversation prompt/personality is configurable in Settings → Agent (`AGENT_SYSTEM_PROMPT`), and applies to campaigns/bulk calls. The Live Calls page's "System Prompt" field overrides it for a single test call without changing the saved default. `AGENT_INITIAL_GREETING` and `AGENT_VOICEMAIL_MESSAGE` are also live-configurable via Settings.
 - SQLite is fine for a single-instance/POC deployment; for production scale, swap `DATABASE_URL` for Postgres.
 
 ## More docs

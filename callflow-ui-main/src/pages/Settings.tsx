@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Copy, Check, Zap, Save, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,6 +88,54 @@ function ApiKeyRow({
           <Zap className="mr-1 h-3 w-3" />Test
         </Button>
         <Button size="sm" onClick={save} disabled={saving} className="shrink-0 text-xs">
+          <Save className="mr-1 h-3 w-3" />{saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Plain text/textarea setting field (agent persona/prompt fields) ──────────
+function TextSettingRow({
+  label, backendKey, serverValue, placeholder, hint, multiline,
+}: {
+  label: string; backendKey: string; serverValue?: string;
+  placeholder?: string; hint?: string; multiline?: boolean;
+}) {
+  const [value, setValue]   = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (serverValue !== undefined && serverValue !== "") setValue(serverValue);
+  }, [serverValue]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await saveConfigKey(backendKey, value);
+      toast.success(`${label} saved`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      toast.error(`Failed to save ${label}`, { description: msg });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const Field = multiline ? Textarea : Input;
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium">{label}</Label>
+      <div className="flex gap-1.5">
+        <Field
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          className={multiline ? "min-h-32 text-sm" : "text-sm"}
+        />
+        <Button size="sm" onClick={save} disabled={saving} className="shrink-0 self-start text-xs">
           <Save className="mr-1 h-3 w-3" />{saving ? "Saving…" : "Save"}
         </Button>
       </div>
@@ -249,7 +298,7 @@ export default function Settings() {
     <div className="mx-auto max-w-4xl space-y-6">
       <Tabs defaultValue="general">
         <TabsList className="mb-4 flex-wrap h-auto gap-1">
-          {["general","llm","voice","stt","telephony","api-keys","security","notifications"].map((t) => (
+          {["general","agent","llm","voice","stt","telephony","api-keys","security","notifications"].map((t) => (
             <TabsTrigger key={t} value={t} className="capitalize text-xs">
               {t.replace("-", " ")}
             </TabsTrigger>
@@ -291,6 +340,42 @@ export default function Settings() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </SettingsSection>
+        </TabsContent>
+
+        {/* ── Agent persona/behavior ── */}
+        <TabsContent value="agent" className="space-y-4">
+          <SettingsSection title="Agent Persona" description="Controls what the agent says and how it behaves on every outbound call — the Live Calls page can still override these per test call.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextSettingRow label="Agent Name" backendKey="agent_name" serverValue={sv("agent_name")} placeholder="Alex" />
+              <TextSettingRow label="Company Name" backendKey="company_name" serverValue={sv("company_name")} placeholder="Premier Property Acquisitions" />
+            </div>
+            <div className="border-t border-border pt-4 mt-4 space-y-4">
+              <TextSettingRow
+                label="Initial Greeting"
+                backendKey="agent_initial_greeting"
+                serverValue={sv("agent_initial_greeting")}
+                placeholder="Hi, is this {customer_name}? This is {agent_name} calling on behalf of {company_name}…"
+                hint="Supports {customer_name}, {agent_name}, {company_name} placeholders. Spoken before the system prompt takes over the conversation."
+                multiline
+              />
+              <TextSettingRow
+                label="System Prompt"
+                backendKey="agent_system_prompt"
+                serverValue={sv("agent_system_prompt")}
+                placeholder="You are an outbound sales agent for…"
+                hint="Governs the agent's persona and conversation behavior for every campaign/live call. A per-call 'System Prompt' on the Live Calls page overrides this for that one call only."
+                multiline
+              />
+              <TextSettingRow
+                label="Voicemail Message"
+                backendKey="agent_voicemail_message"
+                serverValue={sv("agent_voicemail_message")}
+                placeholder="Hello, we tried to reach you but were unable to connect…"
+                hint="Spoken and then the call ends when AMD detects a voicemail greeting."
+                multiline
+              />
             </div>
           </SettingsSection>
         </TabsContent>

@@ -55,24 +55,6 @@ from utils.logger import configure_logging, get_logger
 
 logger = get_logger(__name__)
 
-REAL_ESTATE_PROMPT = """You are Alex, an outbound sales agent for Premier Property Acquisitions calling to ask property owners if they want to sell.
-
-ENGLISH ONLY. No matter what language the customer uses, you ALWAYS reply in English. Never switch to Hindi, Marathi, Gujarati, Tamil, or any other language. If you reply in any language other than English, you have failed.
-
-THE OPENING GREETING HAS ALREADY BEEN SAID FOR YOU. Do NOT say hello, do NOT say "how can I help you", do NOT introduce yourself again. Just wait for the customer's first response, then immediately ask if they have considered selling their property.
-
-CONVERSATION FLOW:
-1. Customer responds → ask if they have considered selling their property in the area
-2. Interested → ask ONE qualifying question at a time: timeline, expected price, listed or off-market
-3. Not interested → thank them, ask if okay to follow up later, end politely
-4. Asks to be removed → say "I'll remove you right away" and end the call
-
-RULES:
-- Keep every response under 2 sentences
-- Never pressure or argue
-- Never lie about who you are
-- ENGLISH ONLY — every single reply, no exceptions"""
-
 
 # ── Agent class ───────────────────────────────────────────────────────────────
 
@@ -151,7 +133,7 @@ class VoiceCallAgent(Agent):
     ) -> None:
         instructions = (
             f"ENGLISH ONLY — every reply must be in English, no exceptions, regardless of what language the customer uses.\n\n"
-            + (system_prompt_override or REAL_ESTATE_PROMPT)
+            + (system_prompt_override or settings.agent_system_prompt)
         )
         super().__init__(instructions=instructions)
         self.call_id = call_id
@@ -423,7 +405,7 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.error("agent.inbound_call_create_failed", error=str(exc))
 
     # Inbound calls have their own persona configured on the Inbound page —
-    # separate from the outbound REAL_ESTATE_PROMPT/greeting defaults. Without
+    # separate from the outbound agent_system_prompt/greeting defaults. Without
     # this, inbound calls silently used the outbound sales script regardless
     # of what was saved in Settings.
     greeting_override: str | None = None

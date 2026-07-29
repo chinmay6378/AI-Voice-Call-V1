@@ -27,6 +27,7 @@ ALLOWED_KEYS = {
     "company_name",
     "agent_initial_greeting",
     "agent_system_prompt",
+    "agent_voicemail_message",
     "app_base_url",
 }
 
